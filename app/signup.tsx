@@ -27,102 +27,102 @@ export default function SignUpScreen() {
                         <Text style={styles.title}>Create Account</Text>
                         <Text style={styles.subText}>Start organizing your care giving journey.</Text>
 
-                {/* This is the email and password input row */}
-                <View style={styles.inputRow}>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputTitle}>First Name</Text>
-                        <TextInput label="First Name" autoCapitalize="none" keyboardType="default" placeholder="Enter your first name" mode="outlined"  activeOutlineColor="#6d28d9" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
-                    </View>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputTitle}>Middle Name (Optional)</Text>
-                        <TextInput label="Middle Name" autoCapitalize="none" keyboardType="default" placeholder="Enter your middle name (optional)" mode="outlined" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
-                    </View>
-                </View>
+                        {/* This is the email and password input row */}
+                        <View style={styles.inputRow}>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputTitle}>First Name</Text>
+                                <TextInput label="First Name" autoCapitalize="none" keyboardType="default" placeholder="Enter your first name" mode="outlined"  activeOutlineColor="#6d28d9" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
+                            </View>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputTitle}>Middle Name (Optional)</Text>
+                                <TextInput label="Middle Name" autoCapitalize="none" keyboardType="default" placeholder="Enter your middle name (optional)" mode="outlined" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
+                            </View>
+                        </View>
 
-                <View style={styles.inputRow}>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputTitle}>Last Name</Text>
-                        <TextInput label="Last Name" autoCapitalize="none" keyboardType="default" placeholder="Enter your last name" mode="outlined"  activeOutlineColor="#6d28d9" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
-                    </View>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputTitle}>Username</Text>
-                        <TextInput label="Username" autoCapitalize="none" keyboardType="default" placeholder="Enter your username" mode="outlined" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
-                    </View>
-                </View>
+                        <View style={styles.inputRow}>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputTitle}>Last Name</Text>
+                                <TextInput label="Last Name" autoCapitalize="none" keyboardType="default" placeholder="Enter your last name" mode="outlined"  activeOutlineColor="#6d28d9" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
+                            </View>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputTitle}>Username</Text>
+                                <TextInput label="Username" autoCapitalize="none" keyboardType="default" placeholder="Enter your username" mode="outlined" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
+                            </View>
+                        </View>
 
-                {/* normal length */}
-                <Text style={styles.inputTitle}>Email</Text>
-                <TextInput label="Email" autoCapitalize="none" keyboardType="email-address" placeholder="example@email.com" mode="outlined"  activeOutlineColor="#6d28d9" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
-                {/* This is the dropdown row for role and sex */}
-                <View style={styles.inputRow}>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputTitle}>Role</Text>
-                        <Menu
-                            visible={menuVisible}
-                            onDismiss={() => setMenuVisible(false)}
-                            anchor={
-                            <Pressable onPress={() => setMenuVisible(true)}>
-                                <TextInput
-                                    value={loginType}
-                                    mode="outlined"
-                                    editable={false}
-                                    pointerEvents="none"
-                                    right={<TextInput.Icon icon="menu-down" />}
-                                    outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                    style={styles.inputField}
-                                />
-                            </Pressable>
-                            }
-                            contentStyle={styles.dropdownContent}
-                            style={styles.dropdown}
-                        >
-                            <Menu.Item onPress={() => { setLoginType("Caregiver"); setMenuVisible(false); }} title="Caregiver" titleStyle={styles.dropdownItemText} />
-                            <Menu.Item onPress={() => { setLoginType("Dependents"); setMenuVisible(false); }} title="Dependents" titleStyle={styles.dropdownItemText} />
-                        </Menu>
-                    </View>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputTitle}>Sex</Text>
-                        <Menu
-                            visible={sexMenuVisible}
-                            onDismiss={() => setSexMenuVisible(false)}
-                            anchor={
-                            <Pressable onPress={() => setSexMenuVisible(true)}>
-                                <TextInput
-                                    value={sex}
-                                    mode="outlined"
-                                    editable={false}
-                                    pointerEvents="none"
-                                    right={<TextInput.Icon icon="menu-down" />}
-                                    outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                    style={styles.inputField}
-                                />
-                            </Pressable>
-                            }
-                            contentStyle={styles.dropdownContent}
-                            style={styles.dropdown}
-                        >
-                            <Menu.Item onPress={() => { setSex("Female"); setSexMenuVisible(false); }} title="Female" titleStyle={styles.dropdownItemText} />
-                            <Menu.Item onPress={() => { setSex("Male"); setSexMenuVisible(false); }} title="Male" titleStyle={styles.dropdownItemText} />
-                            <Menu.Item onPress={() => { setSex("Other"); setSexMenuVisible(false); }} title="Other" titleStyle={styles.dropdownItemText} />
-                        </Menu>
-                    </View>
-                </View>
-                
-                {/* normal length */}
-                <Text style={styles.inputTitle}>Phone Number (Optional)</Text>
-                <TextInput label="Phone Number" autoCapitalize="none" keyboardType="phone-pad" placeholder="09123456789" mode="outlined"  activeOutlineColor="#6d28d9" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
-                <View style={styles.inputRow}>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputTitle}>Password</Text>
-                        <TextInput label="Password" autoCapitalize="none" keyboardType="default" placeholder="Enter your password" mode="outlined"  activeOutlineColor="#6d28d9" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
-                    </View>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputTitle}>Confirm Password</Text>
-                        <TextInput label="Confirm Password" autoCapitalize="none" keyboardType="default" placeholder="Confirm your password" mode="outlined" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
-                    </View>
-                </View>
-                <Button mode="contained" style={styles.button}>Sign Up</Button>
-                <Button mode="text" style={styles.button}>Already have an account? Login</Button>
+                        {/* normal length */}
+                        <Text style={styles.inputTitle}>Email</Text>
+                        <TextInput label="Email" autoCapitalize="none" keyboardType="email-address" placeholder="example@email.com" mode="outlined"  activeOutlineColor="#6d28d9" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
+                        {/* This is the dropdown row for role and sex */}
+                        <View style={styles.inputRow}>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputTitle}>Role</Text>
+                                <Menu
+                                    visible={menuVisible}
+                                    onDismiss={() => setMenuVisible(false)}
+                                    anchor={
+                                    <Pressable onPress={() => setMenuVisible(true)}>
+                                        <TextInput
+                                            value={loginType}
+                                            mode="outlined"
+                                            editable={false}
+                                            pointerEvents="none"
+                                            right={<TextInput.Icon icon="menu-down" />}
+                                            outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                            style={styles.inputField}
+                                        />
+                                    </Pressable>
+                                    }
+                                    contentStyle={styles.dropdownContent}
+                                    style={styles.dropdown}
+                                >
+                                    <Menu.Item onPress={() => { setLoginType("Caregiver"); setMenuVisible(false); }} title="Caregiver" titleStyle={styles.dropdownItemText} />
+                                    <Menu.Item onPress={() => { setLoginType("Dependents"); setMenuVisible(false); }} title="Dependents" titleStyle={styles.dropdownItemText} />
+                                </Menu>
+                            </View>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputTitle}>Sex</Text>
+                                <Menu
+                                    visible={sexMenuVisible}
+                                    onDismiss={() => setSexMenuVisible(false)}
+                                    anchor={
+                                    <Pressable onPress={() => setSexMenuVisible(true)}>
+                                        <TextInput
+                                            value={sex}
+                                            mode="outlined"
+                                            editable={false}
+                                            pointerEvents="none"
+                                            right={<TextInput.Icon icon="menu-down" />}
+                                            outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                            style={styles.inputField}
+                                        />
+                                    </Pressable>
+                                    }
+                                    contentStyle={styles.dropdownContent}
+                                    style={styles.dropdown}
+                                >
+                                    <Menu.Item onPress={() => { setSex("Female"); setSexMenuVisible(false); }} title="Female" titleStyle={styles.dropdownItemText} />
+                                    <Menu.Item onPress={() => { setSex("Male"); setSexMenuVisible(false); }} title="Male" titleStyle={styles.dropdownItemText} />
+                                    <Menu.Item onPress={() => { setSex("Other"); setSexMenuVisible(false); }} title="Other" titleStyle={styles.dropdownItemText} />
+                                </Menu>
+                            </View>
+                        </View>
+                        
+                        {/* normal length */}
+                        <Text style={styles.inputTitle}>Phone Number (Optional)</Text>
+                        <TextInput label="Phone Number" autoCapitalize="none" keyboardType="phone-pad" placeholder="09123456789" mode="outlined"  activeOutlineColor="#6d28d9" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
+                        <View style={styles.inputRow}>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputTitle}>Password</Text>
+                                <TextInput label="Password" autoCapitalize="none" keyboardType="default" placeholder="Enter your password" mode="outlined"  activeOutlineColor="#6d28d9" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
+                            </View>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputTitle}>Confirm Password</Text>
+                                <TextInput label="Confirm Password" autoCapitalize="none" keyboardType="default" placeholder="Confirm your password" mode="outlined" outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} style={[styles.input, styles.inputField]}/>
+                            </View>
+                        </View>
+                        <Button mode="contained" style={styles.button}>Sign Up</Button>
+                        <Button mode="text" style={styles.button}>Already have an account? Login</Button>
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -179,6 +179,8 @@ const styles = StyleSheet.create({
 
     scrollContent: {
         paddingBottom: 24,
+        flexGrow: 1,
+        justifyContent: "center",
     },
 
     content: {

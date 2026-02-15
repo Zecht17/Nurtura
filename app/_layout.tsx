@@ -23,7 +23,8 @@ export default function RootLayout() {
       {/* <RouteGuard> */}
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="login" options={{ title: "Login" }} />
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="signup" options={{ headerShown: false }} />
         </Stack>
       {/* </RouteGuard> */}
     </PaperProvider>
