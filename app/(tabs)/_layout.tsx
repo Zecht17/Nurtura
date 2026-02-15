@@ -1,35 +1,39 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import Feather from '@expo/vector-icons/Feather';
+import { Tabs } from "expo-router";
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
+export default function TabsLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
-    </Tabs>
+      <Tabs screenOptions={{tabBarActiveTintColor: "#7C6FDC"}}>
+        <Feather name="home" size={24} color="black" />
+        <Tabs.Screen name="index" options={{ title: "Home", 
+          tabBarIcon: ({color}) => (
+          <Feather name="home" size={24} color={color} />
+          ),
+        }} />
+        <Feather name="check-circle" size={24} color="black" />
+        <Tabs.Screen name="tasks" options={{ title: "Tasks",
+          tabBarIcon: ({color}) => (
+          <Feather name="check-circle" size={24} color={color} />
+          ),
+        }} />
+        <Feather name="calendar" size={24} color="black" />
+        <Tabs.Screen name="calendar" options={{ title: "Calendar",
+          tabBarIcon: ({color}) => (
+          <Feather name="calendar" size={24} color={color} />
+          ),
+        }} />
+        <Feather name="heart" size={24} color="black" />
+        <Tabs.Screen name="care" options={{ title: "Care",
+          tabBarIcon: ({color}) => (
+          <Feather name="heart" size={24} color={color} />
+          ),
+        }} />
+        <Feather name="more-horizontal" size={24} color="black" />
+        <Tabs.Screen name="more" options={{ title: "More",
+          tabBarIcon: ({color}) => (
+          <Feather name="more-horizontal" size={24} color={color} />
+          ),
+        }} />
+      </Tabs>
   );
 }

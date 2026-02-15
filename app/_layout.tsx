@@ -1,24 +1,31 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { Stack } from "expo-router";
+import { MD3LightTheme, PaperProvider } from "react-native-paper";
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+// function RouteGuard ({ children }: { children: React.ReactNode }) {
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+//   const router = useRouter();
+//   const isAuth = false;
+
+//   useEffect(() => {
+//     if (!isAuth) {
+//       router.replace("/signup");
+//     }
+//   });
+
+//   return <>{children}</>
+  
+// }
+
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <PaperProvider theme={MD3LightTheme}>
+      {/* <RouteGuard> */}
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ title: "Login" }} />
+        </Stack>
+      {/* </RouteGuard> */}
+    </PaperProvider>
   );
 }
