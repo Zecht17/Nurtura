@@ -5,7 +5,7 @@ export default function TabsLayout() {
   return (
       <Tabs screenOptions={{tabBarActiveTintColor: "#7C6FDC"}}>
         <Feather name="home" size={24} color="black" />
-        <Tabs.Screen name="index" options={{ title: "Home", 
+        <Tabs.Screen name="index" options={{ headerShown: false , 
           tabBarIcon: ({color}) => (
           <Feather name="home" size={24} color={color} />
           ),
