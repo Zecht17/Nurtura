@@ -215,6 +215,7 @@ const styles = StyleSheet.create({
 
     inputField: {
         backgroundColor: "#ffffff",
+        height: 45,  // to adjust the input smaller or bigger
     },
 
     inputRow: {

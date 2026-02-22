@@ -213,7 +213,7 @@ export default function TaskScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
     container: {
         flex: 1,
     },

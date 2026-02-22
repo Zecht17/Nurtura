@@ -5,7 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 export default function AddTaskShort() {
   return (
-    <Link href="/addTask">
+    <Link href="/addTaskPage">
         <LinearGradient
               colors={["#7C6FDC", "rgb(137, 94, 170)"]}
               start={{ x: 0.3706, y: 0.0171 }}

@@ -30,7 +30,7 @@ export default function Index() {
           {/* <View style={styles.view}>
           <Link href="/login">Go to Login </Link>
           <Link href="/signup">Go to Sign Up</Link>
-        </View> */}
+          </View> */}
 
           {/* This is the Greeting Header */}
           <View style={styles.headerContainer}>
