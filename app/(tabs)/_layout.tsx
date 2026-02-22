@@ -11,7 +11,7 @@ export default function TabsLayout() {
           ),
         }} />
         <Feather name="check-circle" size={24} color="black" />
-        <Tabs.Screen name="tasks" options={{ title: "Tasks",
+        <Tabs.Screen name="tasks" options={{ headerShown: false,
           tabBarIcon: ({color}) => (
           <Feather name="check-circle" size={24} color={color} />
           ),

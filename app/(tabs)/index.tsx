@@ -1,14 +1,21 @@
-import AntDesign from '@expo/vector-icons/AntDesign';
-import Entypo from '@expo/vector-icons/Entypo';
-import Feather from '@expo/vector-icons/Feather';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Octicons from '@expo/vector-icons/Octicons';
+import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
+import MissedStatus from "@/components/tags/status/missed";
 import { LinearGradient } from "expo-linear-gradient";
-import { Link } from 'expo-router';
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Menu, RadioButton, TextInput } from "react-native-paper";
+import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AddTaskShort from "../../components/buttons/addButton";
+import AiAssistantButton from "../../components/buttons/quickActionButtons/aiAssistant";
+import CareSpaceButton from "../../components/buttons/quickActionButtons/careSpace";
+import DependentsCard from "../../components/cards/dependents";
+import TaskCard from "../../components/cards/taskCard";
+import TodayTasksCard from "../../components/cards/todayTasks";
+import WeekSummaryCard from "../../components/cards/weekSummary";
+import DateStatus from "../../components/tags/date/dateStatus";
+import DailyRecurringStatus from "../../components/tags/recurring/daily";
+import PendingStatus from "../../components/tags/status/pending";
+import HighPriorityStatus from "../../components/tags/urgency/highPriority";
 
 export default function Index() {
   const [range, setRange] = useState("Today");
@@ -33,57 +40,13 @@ export default function Index() {
 
           {/* This the Summary Components */}
           <View style={styles.summaryContainer}>
-            <LinearGradient colors={["#7C6FDC", "rgb(137, 94, 170)"]} start={{ x: 0.3706, y: 0.0171 }} end={{ x: 0.6294, y: 1 }} style={styles.summaryContainer}>
-              <View style={styles.summaryTextContainer}>
-                <Octicons name="graph" size={24} color="white" />
-                <Text style={styles.summaryText}>This Week's Summary</Text>
-              </View>
-
-              <View style={styles.progressContainer}>
-                <View style={styles.progressText}>
-                  <Text style={styles.progressNumber}>6</Text>
-                  <Text style={styles.progressText}>Total Tasks</Text>
-                </View>
-
-                <View style={styles.progressText}>
-                  <Text style={styles.progressNumber}>0</Text>
-                  <Text style={styles.progressText}>Completed</Text>
-                </View>
-
-                <View style={styles.progressText}>
-                  <Text style={styles.progressNumber}>0%</Text>
-                  <Text style={styles.progressText}>Success Rate</Text>
-                </View>
-              </View>
-
-              <View style={styles.completionContainer}>
-                <View style={styles.completionText}>
-                  <Text style={styles.completionText}>Completion Progress</Text>
-                  <Text style={styles.completionText}>0%</Text>
-                </View>
-                <View style={styles.progressBar}></View>
-              </View>
-
-            </LinearGradient>
+            <WeekSummaryCard />
           </View>
-
+          
           {/* This is for the Today's Tasks and Dependents */}
           <View style={styles.cardsRow}>
-            <LinearGradient colors={["#7C6FDC", "rgb(137, 94, 170)"]} start={{ x: 0.3706, y: 0.0171 }} end={{ x: 0.6294, y: 1 }} style={[styles.summaryContainer, styles.smallCard]}>
-              <Text style={styles.dependentInfoTitle}>Today's Tasks</Text>
-              <View style={styles.progressContainer}>
-                <Text style={styles.dependentInfoText}>5</Text>
-                <Feather name="check-circle" size={30} color="#ffffff" />
-              </View>
-            </LinearGradient>
-
-            <LinearGradient colors={["#7C6FDC", "rgb(137, 94, 170)"]} start={{ x: 0.3706, y: 0.0171 }} end={{ x: 0.6294, y: 1 }} style={[styles.summaryContainer, styles.smallCard]}>
-              <Text style={styles.dependentInfoTitle}>Dependents</Text>
-              <View style={styles.progressContainer}>
-                <Text style={styles.dependentInfoText}>2</Text>
-                <Octicons name="person" size={30} color="white" />
-              </View>
-            </LinearGradient>
+            <TodayTasksCard />
+            <DependentsCard />
           </View>
 
           {/* This is for the  Task row, dropdown, and add button */}
@@ -114,12 +77,7 @@ export default function Index() {
                 <Menu.Item onPress={() => { setRange("Month"); setMenuVisible(false); }} title="This Month" titleStyle={styles.dropdownItemText} />
               </Menu>
               
-              <Link href="/addTask">
-              <View style={styles.addButton}>
-                <AntDesign name="plus" size={18} color="white" />
-                <Text style={{ color: "white", marginLeft: 8, fontSize: 18 }}>Add</Text>
-              </View>
-              </Link>
+              <AddTaskShort />
 
             </View>
           </View>
@@ -127,47 +85,42 @@ export default function Index() {
           {/* This is the Task Card */}
           <View style={styles.taskCardContainer}>
             <View>
-              <View style={styles.taskCard}>
-                {/* Radio Button */}
-                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 5 }}>
-                  <RadioButton
-                    value="morning-med"
-                    status={selectedTask === "morning-med" ? "checked" : "unchecked"}
-                    onPress={() => setSelectedTask("morning-med")}
-                    color="#7C6FDC"
-                    uncheckedColor="#666"
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.taskOptionsText}>Morning Medication</Text>
-                    <Text style={styles.taskSubHeader}>Jirah Denisse</Text>
-                    <Text style={styles.taskSubHeader}>Give multivitamin with breakfast</Text>
-                  </View>
-                </View>
-                {/* Status */}
-                <View style={status.Row}>
-                  <View style={status.Pending}>
-                    <Text style={status.PendingText}>Pending</Text>
-                  </View>
-                  <View style={status.Urgency}>
-                    <Text style={status.highPriorityText}>High Priority</Text>
-                  </View>
-                  <View style={status.Recurring}>
-                    <Text style={status.dailyText}>Daily</Text>
-                  </View>
-                </View>
-
-                <View style={status.Row}>
-                  <LinearGradient colors={["#e0e0e0", "#cecdcd"]} start={{ x: 0.3706, y: 0.0171 }} end={{ x: 0.6294, y: 0.932 }} style={status.Date} >
-                    <Text style={status.dateText}>Feb 8, 2026 Sunday 8:00 am</Text>
-                  </LinearGradient>
-                </View>
-              </View>
-
+              <TaskCard
+                value="morning-med"
+                selectedTask={selectedTask}
+                onSelect={setSelectedTask}
+                title="Morning Medication"
+                dependent="Jirah Denisse"
+                description="Give multivitamin with breakfast"
+                statusTags={
+                  <>
+                    <PendingStatus />
+                    <HighPriorityStatus />
+                    <DailyRecurringStatus />
+                  </>
+                }
+                dateTag={<DateStatus />}
+              />
             </View>
-
-
             {/* This is where the next card goes */}
-
+            <View>
+              <TaskCard
+                value="take-out-trash"
+                selectedTask={selectedTask}
+                onSelect={setSelectedTask}
+                title="Take Out Trash"
+                dependent="Jirah Denisse"
+                description="Take out the trash in the kitchen"
+                statusTags={
+                  <>
+                    <MissedStatus />
+                    <HighPriorityStatus />
+                    <WeeklyRecurringStatus />
+                  </>
+                }
+                dateTag={<DateStatus />}
+              />
+            </View>
           </View>
           
           {/* Quick Actions */}
@@ -176,14 +129,8 @@ export default function Index() {
           </View>
 
           <View style={styles.quickActionRow}>
-            <View style={styles.quickActionCard}>
-              <Entypo name="text-document" size={24} color="#7C6FDC" />
-              <Text style={styles.quickActionText}>Care Spaces</Text>
-            </View>
-            <View style={styles.quickActionCard}>
-              <MaterialCommunityIcons name="star-four-points-outline" size={24} color="#7C6FDC" />
-              <Text style={styles.quickActionText}>AI Assistant</Text>
-            </View>
+            <CareSpaceButton />
+            <AiAssistantButton />
           </View>
 
         </View>
@@ -229,69 +176,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
 
-  summaryText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#ffffff",
-  },
-
-  summaryTextContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  progressContainer: {
-    marginTop: 15,
-    flexDirection: "row",
-    gap: 50,
-    alignContent: "center",
-    justifyContent: "center",
-    // backgroundColor: "#ffffff",
-    // borderRadius: 14,
-    // padding: 10,
-    // height: 100,
-  },
-
-  progressText: {
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    fontSize: 16,
-    color: "#ffffff",
-    marginTop: 5,
-  },
-
-  progressNumber: {
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#ffffff",
-  },
-
-  completionContainer: {
-    marginTop: 15,
-  },
-
-  completionText: {
-    fontSize: 16,
-    color: "#ffffff",
-    marginTop: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  progressBar: {
-    marginTop: 5,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#ffffff2c",
-    width: "100%",
-  },
-
   cardsRow: {
     flexDirection: "row",
     justifyContent: "center",
@@ -299,26 +183,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 15,
     marginBottom: 10,
-  },
-
-  smallCard: {
-    flex: 1,
-    maxWidth: 220,
-  },
-
-  dependentInfoText: {
-    fontSize: 35,
-    marginTop: -4,
-    fontWeight: "bold",
-    color: "#ffffff",
-    alignContent: "center",
-    justifyContent: "center",
-  },
-
-  dependentInfoTitle: {
-    fontSize: 16,
-    color: "#ffffff",
-    marginBottom: 5,
   },
 
   taskOptions: {
@@ -364,16 +228,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
-  addButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#7C6FDC",
-    width: 100,
-    height: 35,
-    borderRadius: 16,
-  },
-
   taskCardContainer: {
     paddingTop: 0,
     padding: 20,
@@ -385,21 +239,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  taskCard: {
-    width: "100%",
-    alignContent: "center",
-    justifyContent: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 20,
-  },
-
-  taskSubHeader: {
-    fontSize: 16,
-    color: "#666",
-    marginTop: 5,
-  },
-
   quickActionRow: {
     flexDirection: "row",
     justifyContent: "center",
@@ -409,83 +248,4 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
 
-  quickActionCard: {
-    flex: 1,
-    flexDirection: "column",
-    width: "50%",
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  quickActionText: {
-    fontSize: 16,
-    color: "#666",
-    marginTop: 5,
-  },
-});
-
-// Status Styles
-const status = StyleSheet.create({
-  Row: {
-    paddingLeft: 35,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 10,
-  },
-
-  Pending: {
-    backgroundColor: "#FBBF24",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-
-  PendingText: {
-    color: "#ffffff",
-    fontSize: 14,
-    // fontWeight: "bold",
-  },
-
-  Urgency: {
-    backgroundColor: "#EF4444",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-
-  highPriorityText: {
-    color: "#ffffff",
-    fontSize: 14,
-    // fontWeight: "bold",
-  },
-
-  Recurring: {
-    backgroundColor: "#3B82F6",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-
-  dailyText: {
-    color: "#ffffff",
-    fontSize: 14,
-    // fontWeight: "bold",
-  },
-
-  Date: {
-    backgroundColor: "#f1f1f1",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-
-  dateText: {
-    color: "#000000",
-    fontSize: 14,
-    // fontWeight: "bold",
-  },
 });
