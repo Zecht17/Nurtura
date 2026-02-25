@@ -27,6 +27,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export default function TaskScreen() {
     const router = useRouter();
+    // For the dropdowns
     const [range, setRange] = useState("All Dependents");
     const [range2, setRange2] = useState("All Categories");
     const [searchQuery, setSearchQuery] = useState("");
@@ -34,9 +35,12 @@ export default function TaskScreen() {
     const [menuVisible2, setMenuVisible2] = useState(false);
     const [selectedStatus, setSelectedStatus] = useState("pending");
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
+    // For the task card when created
     const { tasks } = useTasks();
+    // For the date and time
     const now = new Date();
 
+    // For the task card shows all the status, priority, and recurring pattern of the task
     const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
         if (!dueDate) return null;
         // Combine strings and let Date parse; fall back to date-only if time missing
