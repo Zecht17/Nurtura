@@ -3,12 +3,17 @@ import EditableTaskCard from "@/components/cards/editableTaskCard";
 import DateStatus from "@/components/tags/date/dateStatus";
 import DailyRecurringStatus from "@/components/tags/recurring/daily";
 import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
+import MonthlyRecurringStatus from "@/components/tags/recurring/monthly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
-import HighPriorityStatus from "@/components/tags/urgency/highPriority";
+import HighPriorityStatus from "@/components/tags/priority/highPriority";
+import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
+import LowPriorityStatus from "@/components/tags/priority/lowPriority";
+import { useTasks } from "@/context/TasksContext";
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
+import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
 import { LayoutAnimation, Platform, Pressable, TextInput as RNTextInput, ScrollView, StyleSheet, Text, UIManager, View } from "react-native";
@@ -21,6 +26,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 
 export default function TaskScreen() {
+    const router = useRouter();
     const [range, setRange] = useState("All Dependents");
     const [range2, setRange2] = useState("All Categories");
     const [searchQuery, setSearchQuery] = useState("");
@@ -28,12 +34,58 @@ export default function TaskScreen() {
     const [menuVisible2, setMenuVisible2] = useState(false);
     const [selectedStatus, setSelectedStatus] = useState("pending");
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
+    const { tasks } = useTasks();
+    const now = new Date();
+
+    const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
+        if (!dueDate) return null;
+        // Combine strings and let Date parse; fall back to date-only if time missing
+        const combined = [dueDate, dueTime].filter(Boolean).join(" ");
+        const parsed = new Date(combined);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const decoratedTasks = tasks.map((task) => {
+        const due = parseDueDateTime(task.dueDate, task.dueTime);
+        const isOverdue = task.status === "pending" && due && due.getTime() < now.getTime();
+        const computedStatus = isOverdue ? "missing" : task.status;
+        return { ...task, computedStatus };
+    });
+
+    const filteredTasks = decoratedTasks.filter((task) => task.computedStatus === selectedStatus);
+
+    const statusTagByStatus = {
+        pending: <PendingStatus />,
+        completed: <CompletedStatus />,
+        missing: <MissedStatus />,
+    } as const;
+
+    const recurringTagByPattern = {
+        Daily: <DailyRecurringStatus />,
+        Weekly: <WeeklyRecurringStatus />,
+        Monthly: <MonthlyRecurringStatus />,
+    } as const;
+
+    const priorityTagByLevel = {
+        High: <HighPriorityStatus />,
+        Medium: <MediumPriorityStatus />,
+        Low: <LowPriorityStatus />,
+    } as const;
+
+    const renderDateTag = (dueDate?: string, dueTime?: string) => {
+        if (!dueDate && !dueTime) return null;
+        const label = [dueDate, dueTime].filter(Boolean).join(" ");
+        return (
+            <View style={styles.datePill}>
+                <Text style={styles.datePillText}>{label}</Text>
+            </View>
+        );
+    };
 
     return (
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={styles.gradient}>
-        <SafeAreaView style={styles.container}>
-            
-                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <SafeAreaView style={styles.container}>
                     <View style={styles.headerContainer}>
                         <View>
                             <Text style={styles.headerTitle}>Tasks</Text>
@@ -203,12 +255,34 @@ export default function TaskScreen() {
                                     />
                                 </View>
                             )}
+                            {/* This is for the insert function, this will display the created task */}
+                            {filteredTasks.map((task) => (
+                                        <EditableTaskCard
+                                            key={task.id}
+                                            value={task.id}
+                                            selectedTask={selectedTask}
+                                            onSelect={setSelectedTask}
+                                            title={task.title}
+                                            dependent={task.dependent}
+                                            description={task.description}
+                                            statusTags={
+                                                <>
+                                                    {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
+                                                    {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
+                                                    {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
+                                                    
+                                                </>
+                                            }
+                                            dateTag={renderDateTag(task.dueDate, task.dueTime)}
+                                            // Edit function but currently not working on web for some reason
+                                            onEdit={() => router.push({ pathname: "/editTaskPage", params: { id: task.id } })}
+                                        />
+                                ))}
                         </View>
                     </View>
-                    
-                </ScrollView>
-            
-        </SafeAreaView>
+
+            </SafeAreaView>
+        </ScrollView>
         </LinearGradient>
     );
 }
@@ -240,13 +314,7 @@ export const styles = StyleSheet.create({
         marginTop: 20,
     },
 
-    searchInput: {
-        flex: 1,
-        padding: 12,
-        fontSize: 16,
-        marginLeft: 10,
-    },
-
+    // Search bar styles
     searchContainer: {
         flexDirection: "row",
         alignItems: "center",
@@ -257,6 +325,27 @@ export const styles = StyleSheet.create({
         borderRadius: 24,
         borderWidth: 1,
         borderColor: "#e0e0e0",
+    },
+
+    searchInput: {
+        flex: 1,
+        marginLeft: 8,
+        paddingVertical: 8,
+        color: "#000000",
+    },
+
+    datePill: {
+        backgroundColor: "#f1f1f1",
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+        alignSelf: "flex-start",
+        marginTop: 6,
+    },
+
+    datePillText: {
+        color: "#000000",
+        fontSize: 14,
     },
 
     subHeader: {
@@ -374,6 +463,7 @@ export const styles = StyleSheet.create({
 
     taskCardsContainer: {
         marginTop: 20,
+        gap: 12,
     },
 
     statusText: {

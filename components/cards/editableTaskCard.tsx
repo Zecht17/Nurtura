@@ -12,6 +12,7 @@ type TaskCardProps = {
     description: string;
     statusTags?: ReactNode;
     dateTag?: ReactNode;
+    onEdit?: () => void;
 };
 
 export default function EditableTaskCard({
@@ -23,6 +24,7 @@ export default function EditableTaskCard({
     description,
     statusTags,
     dateTag,
+    onEdit,
 }: TaskCardProps) {
     const isSelected = selectedTask === value;
 
@@ -38,7 +40,9 @@ export default function EditableTaskCard({
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                         <Text style={styles.title}>{title}</Text>
                         <View style={{ flexDirection: "row", gap: 10 }}>
-                            <MaterialCommunityIcons name="pencil-outline" size={21} color="#000000" />
+                            <Pressable onPress={onEdit} hitSlop={8}>
+                                <MaterialCommunityIcons name="pencil-outline" size={21} color="#000000" />
+                            </Pressable>
                             <Ionicons name="trash" size={21} color="red" />
                         </View>
                     </View>

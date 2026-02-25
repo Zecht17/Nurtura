@@ -1,5 +1,8 @@
 import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
+import MonthlyRecurringStatus from "@/components/tags/recurring/monthly";
+import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
+import { useTasks } from "@/context/TasksContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -15,12 +18,44 @@ import WeekSummaryCard from "../../components/cards/weekSummary";
 import DateStatus from "../../components/tags/date/dateStatus";
 import DailyRecurringStatus from "../../components/tags/recurring/daily";
 import PendingStatus from "../../components/tags/status/pending";
-import HighPriorityStatus from "../../components/tags/urgency/highPriority";
+import HighPriorityStatus from "../../components/tags/priority/highPriority";
+import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
+import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 
 export default function Index() {
   const [range, setRange] = useState("Today");
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const { tasks } = useTasks();
+
+  // This logic if for the taskCard when a task is inserted
+  const statusTagByStatus = {
+    pending: <PendingStatus />,
+    completed: <CompletedStatus />,
+    missing: <MissedStatus />,
+  } as const;
+
+  const recurringTagByPattern = {
+    Daily: <DailyRecurringStatus />,
+    Weekly: <WeeklyRecurringStatus />,
+    Monthly: <MonthlyRecurringStatus />,
+  } as const;
+
+  const priorityTagByLevel = {
+    High: <HighPriorityStatus />,
+    Medium: <MediumPriorityStatus />,
+    Low: <LowPriorityStatus />,
+  } as const;
+
+  const renderDateTag = (dueDate?: string, dueTime?: string) => {
+    if (!dueDate && !dueTime) return null;
+    const label = [dueDate, dueTime].filter(Boolean).join(" ");
+    return (
+      <View style={styles.datePill}>
+        <Text style={styles.datePillText}>{label}</Text>
+      </View>
+    );
+  };
 
   return (
     <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]}>
@@ -121,17 +156,42 @@ export default function Index() {
                 dateTag={<DateStatus />}
               />
             </View>
+            
+            {/* This is for the insert function, this will display the created task */}
+            {tasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                value={task.id}
+                selectedTask={selectedTask}
+                onSelect={setSelectedTask}
+                title={task.title}
+                dependent={task.dependent}
+                description={task.description}
+                statusTags={
+                  <>
+                    {statusTagByStatus[task.status]}
+                    {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
+                    {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
+                  </>
+                }
+                dateTag={renderDateTag(task.dueDate, task.dueTime)}
+              />
+            ))}
           </View>
           
           {/* Quick Actions */}
-          <View style={styles.taskOptions}>
-            <Text style={styles.taskOptionsText}>Quick Actions</Text>
-          </View>
-
-          <View style={styles.quickActionRow}>
-            <CareSpaceButton />
-            <AiAssistantButton />
-          </View>
+          <Pressable>
+            <View style={styles.taskOptions}>
+              <Text style={styles.taskOptionsText}>Quick Actions</Text>
+            </View>
+          </Pressable>
+          
+          <Pressable>
+            <View style={styles.quickActionRow}>
+              <CareSpaceButton />
+              <AiAssistantButton />
+            </View>
+          </Pressable>
 
         </View>
       </SafeAreaView>
@@ -246,6 +306,20 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 15,
     marginBottom: 0,
+  },
+
+  datePill: {
+    backgroundColor: "#f1f1f1",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    marginTop: 6,
+  },
+
+  datePillText: {
+    color: "#000000",
+    fontSize: 14,
   },
 
 });
