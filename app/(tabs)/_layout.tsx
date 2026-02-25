@@ -34,7 +34,7 @@ export default function TabsLayout() {
           ),
         }} />
         <Tabs.Screen name="calendar" options={{ 
-          title: "Calendar",
+          headerShown: false, 
           tabBarIcon: ({color}) => (
             <Feather name="calendar" size={24} color={color} />
           ),
