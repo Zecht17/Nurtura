@@ -13,6 +13,8 @@ type TaskCardProps = {
     statusTags?: ReactNode;
     dateTag?: ReactNode;
     onEdit?: () => void;
+    onPress?: () => void;
+    onDelete?: () => void;
 };
 
 export default function EditableTaskCard({
@@ -25,11 +27,16 @@ export default function EditableTaskCard({
     statusTags,
     dateTag,
     onEdit,
+    onPress,
+    onDelete,
 }: TaskCardProps) {
     const isSelected = selectedTask === value;
 
     return (
-        <View style={styles.card}>
+        <Pressable
+            onPress={onPress ?? (() => onSelect(value))}
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        >
             <View style={styles.radioRow}>
                 <Pressable onPress={() => onSelect(value)} style={styles.radioWrapper}>
                     <View style={[styles.customRadio, isSelected && styles.customRadioSelected]}>
@@ -43,7 +50,9 @@ export default function EditableTaskCard({
                             <Pressable onPress={onEdit} hitSlop={8}>
                                 <MaterialCommunityIcons name="pencil-outline" size={21} color="#000000" />
                             </Pressable>
-                            <Ionicons name="trash" size={21} color="red" />
+                            <Pressable onPress={onDelete} hitSlop={8}>
+                                <Ionicons name="trash" size={21} color="red" />
+                            </Pressable>
                         </View>
                     </View>
                     <Text style={styles.subHeader}>{dependent}</Text>
@@ -52,7 +61,7 @@ export default function EditableTaskCard({
             </View>
             {statusTags ? <View style={styles.statusRow}>{statusTags}</View> : null}
             {dateTag ? <View style={styles.statusRow}>{dateTag}</View> : null}
-        </View>
+        </Pressable>
     );
 }
 
@@ -64,6 +73,9 @@ const styles = StyleSheet.create({
         backgroundColor: "#ffffff",
         borderRadius: 16,
         padding: 20,
+    },
+    cardPressed: {
+        opacity: 0.9,
     },
     radioRow: {
         flexDirection: "row",

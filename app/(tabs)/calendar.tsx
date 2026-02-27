@@ -1,26 +1,26 @@
-import { Text, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { StyleSheet } from "react-native";
-import { Calendar } from "react-native-calendars";
 import AddTaskButton from "@/components/buttons/addTask";
 import TaskCard from "@/components/cards/taskCard";
-import DailyRecurringStatus from "@/components/tags/recurring/daily";
-import MonthlyRecurringStatus from "@/components/tags/recurring/monthly";
-import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
+import DailyRecurringStatus from "@/components/tags/recurring/daily";
+import MonthlyRecurringStatus from "@/components/tags/recurring/monthly";
+import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
 import { useTasks } from "@/context/TasksContext";
-import { useMemo, useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useMemo, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { Calendar } from "react-native-calendars";
 import { ScrollView } from "react-native-gesture-handler";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 
 export default function CalendarScreen() {
+    const router = useRouter();
     const { tasks } = useTasks();
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -165,6 +165,7 @@ export default function CalendarScreen() {
                                         </>
                                     }
                                     dateTag={renderDateTag(task.dueDate, task.dueTime)}
+                                    onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
                                 />
                             ))}
 
@@ -185,7 +186,7 @@ const styles = StyleSheet.create({
     },
     container: {
         flex: 1,
-        padding: 10,
+        // padding: 10,
     },
 
     scrollContent: {

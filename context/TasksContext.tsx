@@ -18,6 +18,7 @@ type TasksContextValue = {
     tasks: Task[];
     addTask: (task: Task) => void;
     updateTask: (id: string, updates: Partial<Task>) => void;
+    removeTask: (id: string) => void;
 };
 
 const TasksContext = createContext<TasksContextValue | undefined>(undefined);
@@ -33,7 +34,11 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         setTasks((prev) => prev.map((task) => (task.id === id ? { ...task, ...updates } : task)));
     };
 
-    const value = useMemo(() => ({ tasks, addTask, updateTask }), [tasks]);
+    const removeTask = (id: string) => {
+        setTasks((prev) => prev.filter((task) => task.id !== id));
+    };
+
+    const value = useMemo(() => ({ tasks, addTask, updateTask, removeTask }), [tasks]);
 
     return <TasksContext.Provider value={value}>{children}</TasksContext.Provider>;
 }

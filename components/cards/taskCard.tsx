@@ -10,6 +10,7 @@ type TaskCardProps = {
     description: string;
     statusTags?: ReactNode;
     dateTag?: ReactNode;
+    onPress?: () => void;
 };
 
 export default function TaskCard({
@@ -21,11 +22,15 @@ export default function TaskCard({
     description,
     statusTags,
     dateTag,
+    onPress,
 }: TaskCardProps) {
     const isSelected = selectedTask === value;
 
     return (
-        <View style={styles.card}>
+        <Pressable
+            onPress={onPress ?? (() => onSelect(value))}
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        >
             <View style={styles.radioRow}>
                 <Pressable onPress={() => onSelect(value)} style={styles.radioWrapper}>
                     <View style={[styles.customRadio, isSelected && styles.customRadioSelected]}>
@@ -40,7 +45,7 @@ export default function TaskCard({
             </View>
             {statusTags ? <View style={styles.statusRow}>{statusTags}</View> : null}
             {dateTag ? <View style={styles.statusRow}>{dateTag}</View> : null}
-        </View>
+        </Pressable>
     );
 }
 
@@ -52,6 +57,9 @@ const styles = StyleSheet.create({
         backgroundColor: "#ffffff",
         borderRadius: 16,
         padding: 20,
+    },
+    cardPressed: {
+        opacity: 0.9,
     },
     radioRow: {
         flexDirection: "row",

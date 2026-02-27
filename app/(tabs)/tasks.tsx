@@ -1,20 +1,21 @@
 import AddTaskButton from "@/components/buttons/addTask";
 import EditableTaskCard from "@/components/cards/editableTaskCard";
+import DeleteTaskModal from "@/components/modals/DeleteTaskModal";
 import DateStatus from "@/components/tags/date/dateStatus";
+import HighPriorityStatus from "@/components/tags/priority/highPriority";
+import LowPriorityStatus from "@/components/tags/priority/lowPriority";
+import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
 import DailyRecurringStatus from "@/components/tags/recurring/daily";
-import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import MonthlyRecurringStatus from "@/components/tags/recurring/monthly";
+import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
-import HighPriorityStatus from "@/components/tags/priority/highPriority";
-import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
-import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import { useTasks } from "@/context/TasksContext";
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
-import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { LayoutAnimation, Platform, Pressable, TextInput as RNTextInput, ScrollView, StyleSheet, Text, UIManager, View } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
@@ -23,7 +24,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
 
 export default function TaskScreen() {
     const router = useRouter();
@@ -36,10 +36,10 @@ export default function TaskScreen() {
     const [selectedStatus, setSelectedStatus] = useState("pending");
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
     // For the task card when created
-    const { tasks } = useTasks();
+    const { tasks, removeTask } = useTasks();
     // For the date and time
     const now = new Date();
-
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     // For the task card shows all the status, priority, and recurring pattern of the task
     const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
         if (!dueDate) return null;
@@ -261,30 +261,42 @@ export default function TaskScreen() {
                             )}
                             {/* This is for the insert function, this will display the created task */}
                             {filteredTasks.map((task) => (
-                                        <EditableTaskCard
-                                            key={task.id}
-                                            value={task.id}
-                                            selectedTask={selectedTask}
-                                            onSelect={setSelectedTask}
-                                            title={task.title}
-                                            dependent={task.dependent}
-                                            description={task.description}
-                                            statusTags={
-                                                <>
-                                                    {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
-                                                    {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
-                                                    {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
-                                                    
-                                                </>
-                                            }
-                                            dateTag={renderDateTag(task.dueDate, task.dueTime)}
-                                            // Edit function but currently not working on web for some reason
-                                            onEdit={() => router.push({ pathname: "/editTaskPage", params: { id: task.id } })}
-                                        />
-                                ))}
+                                <EditableTaskCard
+                                    key={task.id}
+                                    value={task.id}
+                                    selectedTask={selectedTask}
+                                    onSelect={setSelectedTask}
+                                    title={task.title}
+                                    dependent={task.dependent}
+                                    description={task.description}
+                                    statusTags={
+                                        <>
+                                            {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
+                                            {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
+                                            {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
+                                        </>
+                                    }
+                                    dateTag={renderDateTag(task.dueDate, task.dueTime)}
+                                    onEdit={() => router.push({ pathname: "/editTaskPage", params: { id: task.id } })}
+                                    onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
+                                    onDelete={() => setPendingDeleteId(task.id)}
+                                />
+                            ))}
                         </View>
-                    </View>
 
+                        <DeleteTaskModal
+                            visible={pendingDeleteId !== null}
+                            taskTitle={tasks.find((t) => t.id === pendingDeleteId)?.title}
+                            onConfirm={() => {
+                                if (pendingDeleteId) {
+                                    removeTask(pendingDeleteId);
+                                }
+                                setPendingDeleteId(null);
+                            }}
+                            onCancel={() => setPendingDeleteId(null)}
+                        />
+
+                    </View>
             </SafeAreaView>
         </ScrollView>
         </LinearGradient>
@@ -475,5 +487,16 @@ export const styles = StyleSheet.create({
         fontWeight: "bold",
         marginBottom: 15,
         color: "#333",
+    },
+
+    viewTaskDetailsContainer: {
+        marginTop: 20,
+        alignItems: "center",
+    },
+
+    viewTaskDetailsText: {
+        fontSize: 16,
+        color: "#7C6FDC",
+        fontWeight: "bold",
     },
 });

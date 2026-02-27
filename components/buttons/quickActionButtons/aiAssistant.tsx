@@ -1,10 +1,10 @@
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 
 export default function AiAssistantButton() {
 	return (
 		<View style={styles.card}>
-			<MaterialCommunityIcons name="star-four-points-outline" size={24} color="#7C6FDC" />
+			<Ionicons name="sparkles-outline" size={22} color="#7C6FDC" />
 			<Text style={styles.text}>AI Assistant</Text>
 		</View>
 	);

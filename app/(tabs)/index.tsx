@@ -1,11 +1,14 @@
-import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
+import LowPriorityStatus from "@/components/tags/priority/lowPriority";
+import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
 import MonthlyRecurringStatus from "@/components/tags/recurring/monthly";
+import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import { useTasks } from "@/context/TasksContext";
 import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AddTaskShort from "../../components/buttons/addButton";
@@ -16,11 +19,9 @@ import TaskCard from "../../components/cards/taskCard";
 import TodayTasksCard from "../../components/cards/todayTasks";
 import WeekSummaryCard from "../../components/cards/weekSummary";
 import DateStatus from "../../components/tags/date/dateStatus";
+import HighPriorityStatus from "../../components/tags/priority/highPriority";
 import DailyRecurringStatus from "../../components/tags/recurring/daily";
 import PendingStatus from "../../components/tags/status/pending";
-import HighPriorityStatus from "../../components/tags/priority/highPriority";
-import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
-import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 
 export default function Index() {
   const [range, setRange] = useState("Today");
@@ -175,6 +176,7 @@ export default function Index() {
                   </>
                 }
                 dateTag={renderDateTag(task.dueDate, task.dueTime)}
+                onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
               />
             ))}
           </View>
@@ -200,7 +202,7 @@ export default function Index() {
   );
 }
 
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 24,
     flexGrow: 1,

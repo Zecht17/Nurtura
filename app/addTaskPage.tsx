@@ -405,16 +405,33 @@ export default function AddTaskScreen() {
                                         style={styles.toggle}
                                     />
                                 </View>
-                                <TextInput
-                                    value={timeInputValue}
-                                    onChangeText={handleManualTimeInput}
-                                    mode="outlined"
-                                    editable={true}
-                                    placeholder="HH:MM"
-                                    right={<TextInput.Icon icon="clock" />}
-                                    outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                    style={styles.inputField}
-                                />
+                                <View style={styles.datePickerContainer}>
+                                    {Platform.OS !== 'web' ? (
+                                        <Pressable onPress={() => setShowTimePicker(true)}>
+                                            <TextInput
+                                                value={dueTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                                mode="outlined"
+                                                editable={false}
+                                                pointerEvents="none"
+                                                placeholder="HH:MM"
+                                                right={<TextInput.Icon icon="clock" />}
+                                                outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                                style={styles.inputField}
+                                            />
+                                        </Pressable>
+                                    ) : (
+                                        <TextInput
+                                            value={timeInputValue}
+                                            onChangeText={handleManualTimeInput}
+                                            mode="outlined"
+                                            editable={true}
+                                            placeholder="HH:MM"
+                                            right={<TextInput.Icon icon="clock" />}
+                                            outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                            style={styles.inputField}
+                                        />
+                                    )}
+                                </View>
 
                                 {/* For the buttons */}
                                 <View style={styles.buttonContainer}>
