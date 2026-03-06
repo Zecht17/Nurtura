@@ -46,7 +46,7 @@ export default function TabsLayout() {
           ),
         }} />
         <Tabs.Screen name="care" options={{ 
-          title: "Care",
+          headerShown: false,
           tabBarIcon: ({color}) => (
             <Octicons name="person" size={24} color={color} />
           ),

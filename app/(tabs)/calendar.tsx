@@ -180,7 +180,7 @@ export default function CalendarScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
     },

@@ -32,6 +32,8 @@ export default function RootLayout() {
               <Stack.Screen name="addTaskPage" options={{ headerShown: false }} />
               <Stack.Screen name="editTaskPage" options={{ headerShown: false }} />
               <Stack.Screen name="taskDetails" options={{ headerShown: false }} />
+              <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} />
+              <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} />
             </Stack>
           {/* </RouteGuard> */}
         </PaperProvider>
