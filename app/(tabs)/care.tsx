@@ -1,13 +1,18 @@
 import CareButtons from "@/components/buttons/careSpaceButtons";
+import AddCaregiverModal from "@/components/modals/addCaregiverModal";
 import { styles } from "@/components/styles/care-css";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Pressable, StatusBar, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 
 export default function CareScreen() {
+    const [isAddCaregiverVisible, setIsAddCaregiverVisible] = useState(false);
+    StatusBar.setBarStyle("dark-content");
+
     return (
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={{ flex: 1 }}>
             <SafeAreaView style={{ flex: 1 }}>
@@ -31,7 +36,14 @@ export default function CareScreen() {
                             <Text style={styles.careSubTitle}>Caregivers</Text>
                             <View style={styles.addCaregiverButton}>
                                 <FontAwesome6 name="add" size={15} color="black" />
-                                <Text style={styles.addCaregiverText}>Add Caregiver</Text>
+                                <Pressable
+                                    onPress={(event) => {
+                                        event.stopPropagation();
+                                        setIsAddCaregiverVisible(true);
+                                    }}
+                                >
+                                    <Text style={styles.addCaregiverText}>Add Caregiver</Text>
+                                </Pressable>
                             </View>
                         </View>
 
@@ -40,6 +52,8 @@ export default function CareScreen() {
                             <View style={styles.caregiverNameRow}>
                                 <View style={styles.caregiverItem}><Text style={styles.careGiverIcon}>J</Text></View>
                                 <Text style={styles.caregiverName}>John Doe</Text>
+                                <Text style={styles.caregiverName}>(Owner)</Text>
+                                {/* <OwnerBadge/> */}
                             </View>
 
                             <View style={styles.caregiverNameRow}>
@@ -51,31 +65,36 @@ export default function CareScreen() {
                             </View>
                         </View>
 
-                        {/* Dependent List */}
+                        {/* Member List */}
                         <View style={styles.caregiverRow}>
-                            <Text style={styles.careSubTitle}>Carespace Dependent</Text>
+                            <Text style={styles.careSubTitle}>Carespace Members</Text>
                             <View style={styles.addCaregiverButton}>
                                 <FontAwesome6 name="add" size={15} color="black" />
-                                <Text style={styles.addCaregiverText}>Add Dependent</Text>
+                                <Text style={styles.addCaregiverText}>Add Member</Text>
                             </View>
                         </View>
 
-                        <View style={styles.dependentList}>
-                            <View style={styles.caregiverNameRow}>
-                                <View style={styles.dependentItem}><Text style={styles.careGiverIcon}>J</Text></View>
-                                <Text style={styles.dependentName}>John Doe</Text>
+                        <View style={styles.memberList}>
+                            <View style={styles.memberNameRow}>
+                                <View style={styles.memberItem}><Text style={styles.careGiverIcon}>J</Text></View>
+                                <Text style={styles.memberName}>John Doe</Text>
                             </View>
 
-                            <View style={styles.dependentNameRow}>
-                                <View style={styles.dependentItem}><Text style={styles.dependentIcon}>R</Text></View>
+                            <View style={styles.memberNameRow}>
+                                <View style={styles.memberItem}><Text style={styles.memberIcon}>R</Text></View>
                                 <View style={{flexDirection: "column", alignItems: "flex-start", justifyContent: "flex-start"}}>
-                                    <Text style={styles.dependentName}>Ralph Jayrell</Text>
-                                    <Text style={styles.backupText}>Backup</Text>
+                                    <Text style={styles.memberName}>Ralph Jayrell</Text>
                                 </View>
                             </View>
                         </View>
                     </Pressable>
 
+                    <AddCaregiverModal
+                        visible={isAddCaregiverVisible}
+                        code="AFTUPD"
+                        onClose={() => setIsAddCaregiverVisible(false)}
+                        onAddCaregiver={() => setIsAddCaregiverVisible(false)}
+                    />
                 </View>
             </SafeAreaView>
         </LinearGradient>

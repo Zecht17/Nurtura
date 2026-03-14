@@ -8,7 +8,7 @@ import { useTasks } from "@/context/TasksContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, } from "react-native";
+import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View, } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AddTaskShort from "../../components/buttons/addButton";
@@ -28,6 +28,7 @@ export default function Index() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const { tasks } = useTasks();
+  StatusBar.setBarStyle("dark-content");
 
   // This logic if for the taskCard when a task is inserted
   const statusTagByStatus = {

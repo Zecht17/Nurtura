@@ -13,7 +13,7 @@ import { useTasks } from "@/context/TasksContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StatusBar, StyleSheet, Text, View } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -24,6 +24,7 @@ export default function CalendarScreen() {
     const { tasks } = useTasks();
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
+    StatusBar.setBarStyle("dark-content");
 
     // This is  for the selected date label
     const selectedDateLabel = useMemo(() => {

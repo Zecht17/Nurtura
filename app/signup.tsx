@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, usePathname } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, View } from "react-native";
 import { Button, Menu, Text, TextInput } from 'react-native-paper';
 
 export default function SignUpScreen() {
@@ -11,6 +11,7 @@ export default function SignUpScreen() {
     const [sex, setSex] = useState("Select Sex");
     const [sexMenuVisible, setSexMenuVisible] = useState(false);
     const pathname = usePathname();
+    StatusBar.setBarStyle("dark-content");
 
     return (
         <LinearGradient

@@ -153,9 +153,9 @@ export const styles = StyleSheet.create({
         color: "#999",
     },
 
-    // Dependent styling
+    // Member styling
 
-    dependentItem: {
+    memberItem: {
         backgroundColor: "#7C6FDC",
         width: 40,
         height: 40,
@@ -163,19 +163,19 @@ export const styles = StyleSheet.create({
         borderRadius: 100,
     },
 
-    dependentIcon: {
+    memberIcon: {
         color: "#fff",
         fontSize: 16,
         fontWeight: "bold",
         textAlign: "center",
     },
 
-    dependentName: {
+    memberName: {
         fontSize: 16,
         color: "#333",
     },
 
-    dependentNameRow: {
+    memberNameRow: {
         flexDirection: "row",
         gap: 10,
         justifyContent: "flex-start",
@@ -183,7 +183,7 @@ export const styles = StyleSheet.create({
         alignContent: "center",
     },
 
-    dependentList: {
+    memberList: {
         marginTop: 10,
         gap: 10,
     },

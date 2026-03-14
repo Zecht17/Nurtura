@@ -1,6 +1,8 @@
+import React from "react";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { router } from "expo-router";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,31 +11,49 @@ type MoreFeaturesModalProps = {
     onClose: () => void;
 };
 
-const FEATURES = [
+type FeatureItem = {
+    title: string;
+    subtitle: string;
+    icon: React.ReactNode;
+    route?: string;
+};
+
+const FEATURES: FeatureItem[] = [
     {
         title: "Voice Alerts",
         subtitle: "Send urgent voice messages",
         icon: <Feather name="mic" size={22} color="#7C6FDC" />,
+        route: undefined,
     },
     {
-        title: "Care Spaces",
-        subtitle: "Collaborate with family",
+        title: "Dependent Profile",
+        subtitle: "Manage dependent information and preferences",
         icon: <Ionicons name="people-outline" size={22} color="#7C6FDC" />,
+        route: "/dependentProfile",
     },
     {
         title: "AI Assistant",
         subtitle: "Get personalized help",
         icon: <Ionicons name="sparkles-outline" size={22} color="#7C6FDC" />,
+        route: "/aiChat",
     },
     {
         title: "Settings",
         subtitle: "Account & preferences",
         icon: <Feather name="settings" size={22} color="#7C6FDC" />,
+        route: undefined,
     },
 ];
 
 export default function MoreFeaturesModal({ visible, onClose }: MoreFeaturesModalProps) {
     const insets = useSafeAreaInsets();
+
+    const handleNavigate = (route?: string) => {
+        if (!route) return;
+        router.push(route);
+        onClose();
+    };
+
     return (
         <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
             <View style={styles.backdrop}>
@@ -48,17 +68,18 @@ export default function MoreFeaturesModal({ visible, onClose }: MoreFeaturesModa
 
                         <ScrollView contentContainerStyle={styles.list}>
                             {FEATURES.map((item) => (
-                                    <Pressable
-                                        key={item.title}
-                                        style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
-                                    >
-                                        <View style={styles.iconPill}>{item.icon}</View>
-                                        <View style={styles.textGroup}>
-                                            <Text style={styles.itemTitle}>{item.title}</Text>
-                                            <Text style={styles.itemSubtitle}>{item.subtitle}</Text>
-                                        </View>
-                                    </Pressable>
-                                ))}
+                                <Pressable
+                                    key={item.title}
+                                    style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+                                    onPress={() => handleNavigate(item.route)}
+                                >
+                                    <View style={styles.iconPill}>{item.icon}</View>
+                                    <View style={styles.textGroup}>
+                                        <Text style={styles.itemTitle}>{item.title}</Text>
+                                        <Text style={styles.itemSubtitle}>{item.subtitle}</Text>
+                                    </View>
+                                </Pressable>
+                            ))}
                         </ScrollView>
                     </View>
                 </View>

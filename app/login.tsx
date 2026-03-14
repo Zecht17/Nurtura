@@ -1,13 +1,14 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, usePathname } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, StatusBar, StyleSheet, View } from "react-native";
 import { Button, Menu, Text, TextInput } from 'react-native-paper';
 
 export default function LoginScreen() {
     const [loginType, setLoginType] = useState("Caregiver");
     const [menuVisible, setMenuVisible] = useState(false);
     const pathname = usePathname();
+    StatusBar.setBarStyle("dark-content");
 
     return (
         <LinearGradient

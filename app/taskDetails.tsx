@@ -10,11 +10,13 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 
 export default function TaskDetails() {
     const { tasks, removeTask } = useTasks();
     const { id } = useLocalSearchParams<{ id?: string }>();
+
+    StatusBar.setBarStyle("dark-content");
 
     const task = useMemo(() => {
         if (!tasks || tasks.length === 0) return undefined;

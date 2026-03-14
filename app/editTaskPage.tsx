@@ -2,7 +2,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Checkbox, Menu, Switch, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomDatePickerModal from "../components/modals/CustomDatePickerModal";
@@ -13,6 +13,7 @@ export default function EditTaskScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id?: string }>();
     const { tasks, updateTask } = useTasks();
+    StatusBar.setBarStyle("dark-content");
 
     const task = useMemo(() => tasks.find((t) => t.id === id), [tasks, id]);
 

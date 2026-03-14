@@ -17,7 +17,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { LayoutAnimation, Platform, Pressable, TextInput as RNTextInput, ScrollView, StyleSheet, Text, UIManager, View } from "react-native";
+import { LayoutAnimation, Platform, Pressable, StatusBar, TextInput as RNTextInput, ScrollView, StyleSheet, Text, UIManager, View } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -55,6 +55,8 @@ export default function TaskScreen() {
         const computedStatus = isOverdue ? "missing" : task.status;
         return { ...task, computedStatus };
     });
+
+    StatusBar.setBarStyle("dark-content");
 
     const filteredTasks = decoratedTasks.filter((task) => task.computedStatus === selectedStatus);
 

@@ -6,12 +6,13 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function EditCareSpaceSettings() {
 	const [spaceName, setSpaceName] = useState("Emma's Care");
 	const [description, setDescription] = useState("Case for Emma");
+	StatusBar.setBarStyle("dark-content");
 
 	const handleSave = () => {
 		// TODO: Persist changes to backend or context

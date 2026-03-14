@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Checkbox, Menu, Switch, TextInput } from 'react-native-paper';
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomDatePickerModal from '../components/modals/CustomDatePickerModal';
@@ -12,6 +12,7 @@ import { useTasks } from "../context/TasksContext";
 export default function AddTaskScreen() {
     const router = useRouter();
     const { addTask } = useTasks();
+    StatusBar.setBarStyle("dark-content");
     // For Dropdowns
     const [menuVisible1, setMenuVisible1] = useState(false);
     const [menuVisible2, setMenuVisible2] = useState(false);
