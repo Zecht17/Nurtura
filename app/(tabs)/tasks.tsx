@@ -1,5 +1,6 @@
 import AddTaskButton from "@/components/buttons/addTask";
 import EditableTaskCard from "@/components/cards/editableTaskCard";
+import NoPendingTask from "@/components/cards/noPendingTask";
 import DeleteTaskModal from "@/components/modals/DeleteTaskModal";
 import DateStatus from "@/components/tags/date/dateStatus";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
@@ -16,8 +17,8 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { LayoutAnimation, Platform, Pressable, StatusBar, TextInput as RNTextInput, ScrollView, StyleSheet, Text, UIManager, View } from "react-native";
+import { useEffect, useState } from "react";
+import { LayoutAnimation, Platform, Pressable, TextInput as RNTextInput, ScrollView, StatusBar, StyleSheet, Text, UIManager, View } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -38,21 +39,59 @@ export default function TaskScreen() {
     // For the task card when created
     const { tasks, removeTask } = useTasks();
     // For the date and time
-    const now = new Date();
+    const [nowMs, setNowMs] = useState(Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNowMs(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, []);
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     // For the task card shows all the status, priority, and recurring pattern of the task
     const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
         if (!dueDate) return null;
-        // Combine strings and let Date parse; fall back to date-only if time missing
-        const combined = [dueDate, dueTime].filter(Boolean).join(" ");
-        const parsed = new Date(combined);
-        return isNaN(parsed.getTime()) ? null : parsed;
+        const timePart = dueTime && dueTime.trim().length > 0 ? dueTime : "23:59";
+
+        // Try ISO first (yyyy-mm-dd)
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+            const parsedIso = new Date(`${dueDate}T${timePart}`);
+            if (!isNaN(parsedIso.getTime())) return parsedIso;
+        }
+
+        // Try JS native parse
+        const nativeParsed = new Date(`${dueDate} ${timePart}`);
+        if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+
+        // Fallback: parse common locale format mm/dd/yyyy
+        const parts = dueDate.split(/[\/]/).map((p) => parseInt(p, 10));
+        if (parts.length === 3) {
+            const [month, day, year] = parts;
+            if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
+                const [hours, minutes] = timePart
+                    .replace(/\s?(AM|PM)$/i, "")
+                    .split(":")
+                    .map((p) => parseInt(p, 10));
+                const hasPM = /PM$/i.test(timePart);
+                const normalizedHours = Number.isNaN(hours)
+                    ? 23
+                    : Math.min(23, hasPM && hours < 12 ? hours + 12 : hours);
+                const normalizedMinutes = Number.isNaN(minutes) ? 59 : Math.min(59, minutes);
+                const manual = new Date(year, month - 1, day, normalizedHours, normalizedMinutes);
+                if (!isNaN(manual.getTime())) return manual;
+            }
+        }
+
+        return null;
+    };
+
+    const computeComputedStatus = (taskStatus: string, due: Date | null) => {
+        if (taskStatus === "pending" && due && due.getTime() < nowMs) {
+            return "missing" as const;
+        }
+        return taskStatus as "pending" | "completed" | "missing";
     };
 
     const decoratedTasks = tasks.map((task) => {
         const due = parseDueDateTime(task.dueDate, task.dueTime);
-        const isOverdue = task.status === "pending" && due && due.getTime() < now.getTime();
-        const computedStatus = isOverdue ? "missing" : task.status;
+        const computedStatus = computeComputedStatus(task.status, due);
         return { ...task, computedStatus };
     });
 
@@ -80,7 +119,59 @@ export default function TaskScreen() {
 
     const renderDateTag = (dueDate?: string, dueTime?: string) => {
         if (!dueDate && !dueTime) return null;
-        const label = [dueDate, dueTime].filter(Boolean).join(" ");
+
+        const formatDateTime = () => {
+            if (!dueDate) return null;
+            const timePart = dueTime?.trim() || "00:00";
+
+            // Try ISO first
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+                const iso = new Date(`${dueDate}T${timePart}`);
+                if (!isNaN(iso.getTime())) return iso;
+            }
+
+            // Try native parse
+            const nativeParsed = new Date(`${dueDate} ${timePart}`);
+            if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+
+            // Fallback: mm/dd/yyyy
+            const parts = dueDate.split(/[\/]/).map((p) => parseInt(p, 10));
+            if (parts.length === 3) {
+                const [month, day, year] = parts;
+                if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
+                    const parsed = new Date(year, month - 1, day);
+                    if (!isNaN(parsed.getTime())) {
+                        const [h, m] = timePart.replace(/\s?(AM|PM)$/i, "").split(":").map((p) => parseInt(p, 10));
+                        const hasPM = /PM$/i.test(timePart);
+                        const hours = Number.isNaN(h) ? 0 : Math.min(23, hasPM && h < 12 ? h + 12 : h);
+                        const minutes = Number.isNaN(m) ? 0 : Math.min(59, m);
+                        parsed.setHours(hours, minutes, 0, 0);
+                        return parsed;
+                    }
+                }
+            }
+
+        return null;
+        };
+
+        const parsed = formatDateTime();
+        const label = parsed
+            ? (() => {
+                const datePart = parsed.toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                });
+                const weekday = parsed.toLocaleDateString(undefined, { weekday: "long" });
+                const time = parsed.toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                });
+                return `${datePart} ${weekday} at ${time}`;
+            })()
+            : [dueDate, dueTime].filter(Boolean).join(" ");
+
         return (
             <View style={styles.datePill}>
                 <Text style={styles.datePillText}>{label}</Text>
@@ -201,25 +292,8 @@ export default function TaskScreen() {
 
                         {/* Task Cards Display */}
                         <View style={styles.taskCardsContainer}>
-                            {selectedStatus === "pending" && (
-                                <View>
-                                    <EditableTaskCard
-                                        value="morning-med"
-                                        selectedTask={selectedTask}
-                                        onSelect={setSelectedTask}
-                                        title="Morning Medication"
-                                        dependent="Jirah Denisse"
-                                        description="Give multivitamin with breakfast"
-                                        statusTags={
-                                        <>
-                                            <PendingStatus />
-                                            <HighPriorityStatus />
-                                            <DailyRecurringStatus />
-                                        </>
-                                        }
-                                        dateTag={<DateStatus />}
-                                    />
-                                </View>
+                            {selectedStatus === "pending" && filteredTasks.length === 0 && (
+                                <NoPendingTask />
                             )}
                             {selectedStatus === "completed" && (
                                 <View>
@@ -358,7 +432,7 @@ export const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 12,
         alignSelf: "flex-start",
-        marginTop: 6,
+        // marginTop: 6,
     },
 
     datePillText: {

@@ -7,6 +7,7 @@ import { Checkbox, Menu, Switch, TextInput } from 'react-native-paper';
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomDatePickerModal from '../components/modals/CustomDatePickerModal';
 import CustomTimePickerModal from '../components/modals/CustomTimePickerModal';
+import ReminderModal from "../components/modals/reminderModal";
 import { useTasks } from "../context/TasksContext";
 
 export default function AddTaskScreen() {
@@ -56,6 +57,16 @@ export default function AddTaskScreen() {
         setShowTimePicker(false);
     };
 
+    const isInPast = () => {
+        const now = new Date();
+        const datePart = dueDate;
+        const timePart = dueTime;
+        if (!datePart) return false;
+        const combined = new Date(datePart);
+        combined.setHours(timePart.getHours(), timePart.getMinutes(), 0, 0);
+        return combined.getTime() < now.getTime();
+    };
+
     const handleManualDateInput = (text: string) => {
         setDateInputValue(text);
         // Try to parse the input as a date (MM/DD/YYYY or MM-DD-YYYY)
@@ -102,7 +113,8 @@ export default function AddTaskScreen() {
         dependentType !== "Select Dependent" &&
         category !== "Select Category" &&
         priority !== "Select Priority" &&
-        dateInputValue.trim()
+        dateInputValue.trim() &&
+        !isInPast()
     );
 
     const handleSaveTask = () => {
@@ -464,6 +476,18 @@ export default function AddTaskScreen() {
                 onTimeChange={handleTimeChange}
                 onClose={handleCloseTimePicker}
             />
+
+            {/* Reminder trigger modal (only when reminder is enabled and time is in the future) */}
+            {isReminderEnabled && !isInPast() && (
+                <ReminderModal
+                    dueDate={dueDate}
+                    dueTime={dueTime}
+                    title="Task Reminder"
+                    message={`${title || "Task"} is due now.`}
+                    onClose={() => {}}
+                    checkIntervalMs={1000}
+                />
+            )}
         </LinearGradient>
     );
 }

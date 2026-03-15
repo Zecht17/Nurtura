@@ -1,12 +1,26 @@
 import Entypo from "@expo/vector-icons/Entypo";
-import { StyleSheet, Text, View } from "react-native";
+import {
+	Pressable,
+	StyleProp,
+	StyleSheet,
+	Text,
+	ViewStyle,
+} from "react-native";
 
-export default function CareSpaceButton() {
+type Props = {
+	onPress?: () => void;
+	style?: StyleProp<ViewStyle>;
+};
+
+export default function CareSpaceButton({ onPress, style }: Props) {
 	return (
-		<View style={styles.card}>
+		<Pressable
+			onPress={onPress}
+			style={({ pressed }) => [styles.card, { opacity: pressed ? 0.5 : 1 }, style]}
+		>
 			<Entypo name="text-document" size={24} color="#7C6FDC" />
 			<Text style={styles.text}>Care Spaces</Text>
-		</View>
+		</Pressable>
 	);
 }
 

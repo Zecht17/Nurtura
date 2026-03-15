@@ -7,7 +7,7 @@ import MissedStatus from "@/components/tags/status/missed";
 import { useTasks } from "@/context/TasksContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View, } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,20 +15,28 @@ import AddTaskShort from "../../components/buttons/addButton";
 import AiAssistantButton from "../../components/buttons/quickActionButtons/aiAssistant";
 import CareSpaceButton from "../../components/buttons/quickActionButtons/careSpace";
 import DependentsCard from "../../components/cards/dependents";
+import NoPendingTask from "../../components/cards/noPendingTask";
 import TaskCard from "../../components/cards/taskCard";
 import TodayTasksCard from "../../components/cards/todayTasks";
 import WeekSummaryCard from "../../components/cards/weekSummary";
-import DateStatus from "../../components/tags/date/dateStatus";
 import HighPriorityStatus from "../../components/tags/priority/highPriority";
 import DailyRecurringStatus from "../../components/tags/recurring/daily";
 import PendingStatus from "../../components/tags/status/pending";
 
 export default function Index() {
+  const userName = "Juztine Miguel"; // TODO: Get from user context or auth
+
   const [range, setRange] = useState("Today");
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(Date.now());
   const { tasks } = useTasks();
   StatusBar.setBarStyle("dark-content");
+
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // This logic if for the taskCard when a task is inserted
   const statusTagByStatus = {
@@ -49,9 +57,107 @@ export default function Index() {
     Low: <LowPriorityStatus />,
   } as const;
 
+  const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
+    if (!dueDate) return null;
+    const timePart = dueTime && dueTime.trim().length > 0 ? dueTime : "23:59";
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      const parsedIso = new Date(`${dueDate}T${timePart}`);
+      if (!isNaN(parsedIso.getTime())) return parsedIso;
+    }
+
+    const nativeParsed = new Date(`${dueDate} ${timePart}`);
+    if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+
+    const parts = dueDate.split(/[\/]/).map((p) => parseInt(p, 10));
+    if (parts.length === 3) {
+      const [month, day, year] = parts;
+      if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
+        const [hoursRaw, minutesRaw] = timePart
+          .replace(/\s?(AM|PM)$/i, "")
+          .split(":")
+          .map((p) => parseInt(p, 10));
+        const hasPM = /PM$/i.test(timePart);
+        const hours = Number.isNaN(hoursRaw)
+          ? 23
+          : Math.min(23, hasPM && hoursRaw < 12 ? hoursRaw + 12 : hoursRaw);
+        const minutes = Number.isNaN(minutesRaw) ? 59 : Math.min(59, minutesRaw);
+        const manual = new Date(year, month - 1, day, hours, minutes);
+        if (!isNaN(manual.getTime())) return manual;
+      }
+    }
+
+    return null;
+  };
+
+  const computeComputedStatus = (taskStatus: string, due: Date | null) => {
+    if (taskStatus === "pending" && due && due.getTime() < nowMs) {
+      return "missing" as const;
+    }
+    return taskStatus as "pending" | "completed" | "missing";
+  };
+
+  const decoratedTasks = tasks.map((task) => {
+    const due = parseDueDateTime(task.dueDate, task.dueTime);
+    const computedStatus = computeComputedStatus(task.status, due);
+    return { ...task, computedStatus };
+  });
+
   const renderDateTag = (dueDate?: string, dueTime?: string) => {
     if (!dueDate && !dueTime) return null;
-    const label = [dueDate, dueTime].filter(Boolean).join(" ");
+
+    const formatDateTime = () => {
+      if (!dueDate) return null;
+      const timePart = dueTime?.trim() || "00:00";
+
+      // Try ISO first
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+        const iso = new Date(`${dueDate}T${timePart}`);
+        if (!isNaN(iso.getTime())) return iso;
+      }
+
+      // Try native parse
+      const nativeParsed = new Date(`${dueDate} ${timePart}`);
+      if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+
+      // Fallback: mm/dd/yyyy
+      const parts = dueDate.split(/[\/]/).map((p) => parseInt(p, 10));
+      if (parts.length === 3) {
+        const [month, day, year] = parts;
+        if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
+          const parsed = new Date(year, month - 1, day);
+          if (!isNaN(parsed.getTime())) {
+            const [h, m] = timePart.replace(/\s?(AM|PM)$/i, "").split(":").map((p) => parseInt(p, 10));
+            const hasPM = /PM$/i.test(timePart);
+            const hours = Number.isNaN(h) ? 0 : Math.min(23, hasPM && h < 12 ? h + 12 : h);
+            const minutes = Number.isNaN(m) ? 0 : Math.min(59, m);
+            parsed.setHours(hours, minutes, 0, 0);
+            return parsed;
+          }
+        }
+      }
+
+      return null;
+    };
+
+    const parsed = formatDateTime();
+    const label = parsed
+      ? (() => {
+          const datePart = parsed.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+          const weekday = parsed.toLocaleDateString(undefined, { weekday: "long" });
+          const timePart = parsed.toLocaleTimeString(undefined, {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          });
+          return `${datePart} ${weekday} at ${timePart}`;
+        })()
+      : [dueDate, dueTime].filter(Boolean).join(" ");
+
     return (
       <View style={styles.datePill}>
         <Text style={styles.datePillText}>{label}</Text>
@@ -71,7 +177,7 @@ export default function Index() {
 
           {/* This is the Greeting Header */}
           <View style={styles.headerContainer}>
-            <Text style={styles.headerTitle}>Welcome Back, Juztine Miguel!</Text>
+            <Text style={styles.headerTitle}>Welcome Back, {userName}!</Text>
             <Text style={styles.subHeader}>Here's your caregiving overview for today.</Text>
           </View>
 
@@ -121,65 +227,30 @@ export default function Index() {
           
           {/* This is the Task Card */}
           <View style={styles.taskCardContainer}>
-            <View>
-              <TaskCard
-                value="morning-med"
-                selectedTask={selectedTask}
-                onSelect={setSelectedTask}
-                title="Morning Medication"
-                dependent="Jirah Denisse"
-                description="Give multivitamin with breakfast"
-                statusTags={
-                  <>
-                    <PendingStatus />
-                    <HighPriorityStatus />
-                    <DailyRecurringStatus />
-                  </>
-                }
-                dateTag={<DateStatus />}
-              />
-            </View>
-            {/* This is where the next card goes */}
-            <View>
-              <TaskCard
-                value="take-out-trash"
-                selectedTask={selectedTask}
-                onSelect={setSelectedTask}
-                title="Take Out Trash"
-                dependent="Jirah Denisse"
-                description="Take out the trash in the kitchen"
-                statusTags={
-                  <>
-                    <MissedStatus />
-                    <HighPriorityStatus />
-                    <WeeklyRecurringStatus />
-                  </>
-                }
-                dateTag={<DateStatus />}
-              />
-            </View>
-            
-            {/* This is for the insert function, this will display the created task */}
-            {tasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                value={task.id}
-                selectedTask={selectedTask}
-                onSelect={setSelectedTask}
-                title={task.title}
-                dependent={task.dependent}
-                description={task.description}
-                statusTags={
-                  <>
-                    {statusTagByStatus[task.status]}
-                    {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
-                    {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
-                  </>
-                }
-                dateTag={renderDateTag(task.dueDate, task.dueTime)}
-                onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
-              />
-            ))}
+            {decoratedTasks.length === 0 ? (
+              <NoPendingTask />
+            ) : (
+              decoratedTasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  value={task.id}
+                  selectedTask={selectedTask}
+                  onSelect={setSelectedTask}
+                  title={task.title}
+                  dependent={task.dependent}
+                  description={task.description}
+                  statusTags={
+                    <>
+                      {statusTagByStatus[task.computedStatus]}
+                      {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
+                      {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
+                    </>
+                  }
+                  dateTag={renderDateTag(task.dueDate, task.dueTime)}
+                  onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
+                />
+              ))
+            )}
           </View>
           
           {/* Quick Actions */}
@@ -317,7 +388,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     alignSelf: "flex-start",
-    marginTop: 6,
+    // marginTop: 6,
   },
 
   datePillText: {

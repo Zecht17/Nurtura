@@ -4,15 +4,34 @@ import AntDesign from "@expo/vector-icons/AntDesign";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+    Pressable,
+    StyleProp,
+    StyleSheet,
+    Text,
+    View,
+    ViewStyle,
+} from "react-native";
 
-export default function CareButtons() {
+type Props = {
+    createStyle?: StyleProp<ViewStyle>;
+    joinStyle?: StyleProp<ViewStyle>;
+};
+
+export default function CareButtons({ createStyle, joinStyle }: Props) {
     const [isCreateVisible, setIsCreateVisible] = useState(false);
     const [isJoinVisible, setIsJoinVisible] = useState(false);
 
     return (
         <View style={styles.buttonRow}>
-            <Pressable style={{ flex: 1 }} onPress={() => setIsCreateVisible(true)}>
+            <Pressable
+			style={({ pressed }) => [
+				{ flex: 1 },
+				{ opacity: pressed ? 0.5 : 1 },
+				createStyle,
+			]}
+			onPress={() => setIsCreateVisible(true)}
+		>
                 <LinearGradient
                     colors={["#7C6FDC", "rgb(137, 94, 170)"]}
                     start={{ x: 0.3706, y: 0.0171 }}
@@ -26,7 +45,14 @@ export default function CareButtons() {
                 </LinearGradient>
             </Pressable>
 
-            <Pressable style={{ flex: 1 }} onPress={() => setIsJoinVisible(true)}>
+            <Pressable
+            style={({ pressed }) => [
+                { flex: 1 },
+                { opacity: pressed ? 0.5 : 1 },
+                joinStyle,
+            ]}
+            onPress={() => setIsJoinVisible(true)}
+        >
                 <LinearGradient
                     colors={["#ffffff", "#dbdbdb"]}
                     start={{ x: 0.3706, y: 0.0171 }}

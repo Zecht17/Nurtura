@@ -1,12 +1,36 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import {
+    Pressable,
+    StyleProp,
+    StyleSheet,
+    Text,
+    ViewStyle,
+} from "react-native";
 
-export default function AiAssistantButton() {
+type Props = {
+	onPress?: () => void;
+	style?: StyleProp<ViewStyle>;
+};
+
+export default function AiAssistantButton({ onPress, style }: Props) {
+	const router = useRouter();
+
 	return (
-		<View style={styles.card}>
+		<Pressable
+			onPress={() => {
+				router.push("/aiChat");
+				onPress?.();
+			}}
+			style={({ pressed }) => [
+				styles.card,
+				{ opacity: pressed ? 0.5 : 1 },
+				style,
+			]}
+		>
 			<Ionicons name="sparkles-outline" size={22} color="#7C6FDC" />
 			<Text style={styles.text}>AI Assistant</Text>
-		</View>
+		</Pressable>
 	);
 }
 

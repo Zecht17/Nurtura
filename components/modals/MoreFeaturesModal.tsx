@@ -1,8 +1,8 @@
-import React from "react";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
+import React from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -19,12 +19,12 @@ type FeatureItem = {
 };
 
 const FEATURES: FeatureItem[] = [
-    {
-        title: "Voice Alerts",
-        subtitle: "Send urgent voice messages",
-        icon: <Feather name="mic" size={22} color="#7C6FDC" />,
-        route: undefined,
-    },
+    // {
+    //     title: "Voice Alerts",
+    //     subtitle: "Send urgent voice messages",
+    //     icon: <Feather name="mic" size={22} color="#7C6FDC" />,
+    //     route: undefined,
+    // },
     {
         title: "Dependent Profile",
         subtitle: "Manage dependent information and preferences",
@@ -41,7 +41,7 @@ const FEATURES: FeatureItem[] = [
         title: "Settings",
         subtitle: "Account & preferences",
         icon: <Feather name="settings" size={22} color="#7C6FDC" />,
-        route: undefined,
+        route: "/settings",
     },
 ];
 

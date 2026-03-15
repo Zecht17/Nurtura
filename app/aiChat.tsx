@@ -5,6 +5,7 @@ import { Linking, Platform, StatusBar, StyleSheet, Text, TextInput, TouchableOpa
 import Markdown from "react-native-markdown-display";
 import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
+// import { demoMessages } from "../components/demo";
 
 type Message = {
     sender: "user" | "ai";
@@ -65,7 +66,7 @@ export default function AIcareAssistant() {
                     >
                         {messages.map((message, index) => (
                             <View key={index} style={{ marginBottom: 15, alignItems: message.sender === "user" ? "flex-end" : "flex-start" }}>
-                                <View style={[{ flex: 1, maxWidth: "80%", padding: 11, paddingVertical: 2, borderRadius: 20 }, message.sender === "user" ? { backgroundColor: "#e3cdeb" } : {}, ]}>
+                                <View style={[{ flex: 1, maxWidth: "80%", padding: 11, paddingVertical: 2, borderRadius: 20 }, message.sender === "user" ? { backgroundColor: "#dedafd" } : {backgroundColor: "#efedf0"}, ]}>
                                     <Markdown style={aiMessages} onLinkPress={(url) => { Linking.openURL(url); return false; }}>
                                         {message.content}
                                     </Markdown>

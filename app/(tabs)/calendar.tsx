@@ -10,9 +10,10 @@ import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
 import { useTasks } from "@/context/TasksContext";
+import Ionicicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StatusBar, StyleSheet, Text, View } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { ScrollView } from "react-native-gesture-handler";
@@ -24,7 +25,13 @@ export default function CalendarScreen() {
     const { tasks } = useTasks();
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
+    const [nowMs, setNowMs] = useState(Date.now());
     StatusBar.setBarStyle("dark-content");
+
+    useEffect(() => {
+        const id = setInterval(() => setNowMs(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, []);
 
     // This is  for the selected date label
     const selectedDateLabel = useMemo(() => {
@@ -61,13 +68,113 @@ export default function CalendarScreen() {
     // This is for the date tag in the task card
     const renderDateTag = (dueDate?: string, dueTime?: string) => {
         if (!dueDate && !dueTime) return null;
-        const label = [dueDate, dueTime].filter(Boolean).join(" ");
+
+        const formatDateTime = () => {
+            if (!dueDate) return null;
+            const timePart = dueTime?.trim() || "00:00";
+
+            // Try ISO first
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+                const iso = new Date(`${dueDate}T${timePart}`);
+                if (!isNaN(iso.getTime())) return iso;
+            }
+
+            // Try native parse
+            const nativeParsed = new Date(`${dueDate} ${timePart}`);
+            if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+
+            // Fallback: mm/dd/yyyy
+            const parts = dueDate.split(/[\/]/).map((p) => parseInt(p, 10));
+            if (parts.length === 3) {
+                const [month, day, year] = parts;
+                if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
+                    const parsed = new Date(year, month - 1, day);
+                    if (!isNaN(parsed.getTime())) {
+                        const [h, m] = timePart.replace(/\s?(AM|PM)$/i, "").split(":").map((p) => parseInt(p, 10));
+                        const hasPM = /PM$/i.test(timePart);
+                        const hours = Number.isNaN(h) ? 0 : Math.min(23, hasPM && h < 12 ? h + 12 : h);
+                        const minutes = Number.isNaN(m) ? 0 : Math.min(59, m);
+                        parsed.setHours(hours, minutes, 0, 0);
+                        return parsed;
+                    }
+                }
+            }
+
+            return null;
+        };
+
+        const parsed = formatDateTime();
+        const label = parsed
+            ? (() => {
+                const datePart = parsed.toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                });
+                const weekday = parsed.toLocaleDateString(undefined, { weekday: "long" });
+                const time = parsed.toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                });
+                return `${datePart} ${weekday} at ${time}`;
+            })()
+            : [dueDate, dueTime].filter(Boolean).join(" ");
+
         return (
             <View style={styles.datePill}>
                 <Text style={styles.datePillText}>{label}</Text>
             </View>
         );
     };
+
+    const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
+        if (!dueDate) return null;
+        const timePart = dueTime && dueTime.trim().length > 0 ? dueTime : "23:59";
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+            const parsedIso = new Date(`${dueDate}T${timePart}`);
+            if (!isNaN(parsedIso.getTime())) return parsedIso;
+        }
+
+        const nativeParsed = new Date(`${dueDate} ${timePart}`);
+        if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+
+        const parts = dueDate.split(/[\/]/).map((p) => parseInt(p, 10));
+        if (parts.length === 3) {
+            const [month, day, year] = parts;
+            if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
+                const [hoursRaw, minutesRaw] = timePart
+                    .replace(/\s?(AM|PM)$/i, "")
+                    .split(":")
+                    .map((p) => parseInt(p, 10));
+                const hasPM = /PM$/i.test(timePart);
+                const hours = Number.isNaN(hoursRaw)
+                    ? 23
+                    : Math.min(23, hasPM && hoursRaw < 12 ? hoursRaw + 12 : hoursRaw);
+                const minutes = Number.isNaN(minutesRaw) ? 59 : Math.min(59, minutesRaw);
+                const manual = new Date(year, month - 1, day, hours, minutes);
+                if (!isNaN(manual.getTime())) return manual;
+            }
+        }
+
+        return null;
+    };
+
+    const computeComputedStatus = (taskStatus: string, due: Date | null) => {
+        if (taskStatus === "pending" && due && due.getTime() < nowMs) {
+            return "missing" as const;
+        }
+        return taskStatus as "pending" | "completed" | "missing";
+    };
+
+    const decoratedTasks = useMemo(() => {
+        return tasks.map((task) => {
+            const due = parseDueDateTime(task.dueDate, task.dueTime);
+            const computedStatus = computeComputedStatus(task.status, due);
+            return { ...task, computedStatus };
+        });
+    }, [tasks, nowMs]);
 
     // This is so it filter tasks based on selected date
     const selectedLocaleDate = useMemo(() => {
@@ -77,8 +184,8 @@ export default function CalendarScreen() {
 
     const filteredTasks = useMemo(() => {
         if (!selectedLocaleDate) return [];
-        return tasks.filter((task) => task.dueDate === selectedLocaleDate);
-    }, [tasks, selectedLocaleDate]);
+        return decoratedTasks.filter((task) => task.dueDate === selectedLocaleDate);
+    }, [decoratedTasks, selectedLocaleDate]);
 
     // Build markedDates with dots for dates that have tasks
     const markedDates = useMemo(() => {
@@ -160,7 +267,7 @@ export default function CalendarScreen() {
                                     description={task.description}
                                     statusTags={
                                         <>
-                                            {statusTagByStatus[task.status]}
+                                            {statusTagByStatus[task.computedStatus]}
                                             {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
                                             {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
                                         </>
@@ -171,7 +278,10 @@ export default function CalendarScreen() {
                             ))}
 
                             {filteredTasks.length === 0 && (
-                                <Text style={styles.emptyState}>No tasks scheduled for this date.</Text>
+                                <View style={styles.emptyCard}>
+                                    <Ionicicons name="calendar" size={48} color="#8F99A7" />
+                                    <Text style={styles.emptyState}>No tasks scheduled for this date.</Text>
+                                </View>
                             )}
                         </View>
                     </View>
@@ -230,6 +340,16 @@ export const styles = StyleSheet.create({
         color: "#666",
         fontSize: 14,
         fontWeight: "400",
+        textAlign: "center",
+    },
+
+    emptyCard: {
+        width: "100%",
+        backgroundColor: "#ffffff",
+        borderRadius: 16,
+        padding: 20,
+        alignItems: "center",
+        justifyContent: "center",
     },
 
     headerContainer: {

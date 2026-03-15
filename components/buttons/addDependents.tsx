@@ -1,24 +1,45 @@
 import AntDesign from "@expo/vector-icons/AntDesign";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import {
+    Pressable,
+    StyleProp,
+    StyleSheet,
+    Text,
+    View,
+    ViewStyle,
+} from "react-native";
 
-export default function AddDependentsButton() {
-    return (
-        <Link href="/addDependentPage">
-            <LinearGradient
-                colors={["#7C6FDC", "rgb(137, 94, 170)"]}
-                start={{ x: 0.3706, y: 0.0171 }}
-                end={{ x: 0.6294, y: 1 }}
-                style={styles.addButton}
-            >
-                <View style={styles.addButton}>
-                    <AntDesign name="plus" size={14} color="white" />
-                    <Text style={styles.addText}>Add Dependent</Text>
-                </View>
-            </LinearGradient>
-        </Link>
-    );
+type Props = {
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+};
+
+export default function AddDependentsButton({ onPress, style }: Props) {
+  return (
+    <Link href="/dependentProfile" asChild>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.addButton,
+          { opacity: pressed ? 0.5 : 1 },
+          style,
+        ]}
+      >
+        <LinearGradient
+          colors={["#7C6FDC", "rgb(137, 94, 170)"]}
+          start={{ x: 0.3706, y: 0.0171 }}
+          end={{ x: 0.6294, y: 1 }}
+          style={styles.addButton}
+        >
+          <View style={styles.addButton}>
+            <AntDesign name="plus" size={14} color="white" />
+            <Text style={styles.addText}>Add Dependent</Text>
+          </View>
+        </LinearGradient>
+      </Pressable>
+    </Link>
+  );
 }
 
 const styles = StyleSheet.create({
