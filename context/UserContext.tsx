@@ -112,10 +112,20 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 }
 
                 if (!refreshedToken || response.status === 401) {
-                    await logout();
-                    setProfileData(null);
-                    setProfileError('Session expired. Please log in again.');
-                    throw new Error('Session expired. Please log in again.');
+                    const unauthorizedData = await parseResponseBody(response);
+                    const unauthorizedMessage = mapApiError(unauthorizedData, 'Unauthorized');
+                    const shouldLogout = /not authenticated|session expired|token|could not validate credentials/i.test(
+                        unauthorizedMessage
+                    );
+
+                    if (shouldLogout) {
+                        await logout();
+                        setProfileData(null);
+                        setProfileError('Session expired. Please log in again.');
+                        throw new Error('Session expired. Please log in again.');
+                    }
+
+                    throw new Error(unauthorizedMessage);
                 }
             }
 

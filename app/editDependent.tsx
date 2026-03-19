@@ -2,58 +2,96 @@ import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Menu, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomDatePickerModal from '../components/modals/CustomDatePickerModal';
-import { DependentType, useDependents } from '../context/DependentContext';
+import { useDependents } from '../context/DependentContext';
 
 export default function EditDependentScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ dependentId?: string | string[] }>();
-    const dependentId = Array.isArray(params.dependentId) ? params.dependentId[0] : params.dependentId;
-    const { getDependentById, updateDependent } = useDependents();
+    const dependentIdParam = Array.isArray(params.dependentId) ? params.dependentId[0] : params.dependentId;
+
+    const { getDependentById, fetchMyDependents, updateDependentProfile } = useDependents();
+
     const isDatePickerSupported = Platform.OS !== 'web';
-    const [fullName, setFullName] = useState('');
-    const [dependentType, setDependentType] = React.useState<DependentType | ''>('');
+
+    const [firstName, setFirstName] = useState('');
+    const [middleName, setMiddleName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
+    const [sex, setSex] = useState('Select Sex');
+    const [sexMenuVisible, setSexMenuVisible] = useState(false);
+
     const [careNotesInput, setCareNotesInput] = useState('');
-    const [additionalNotesInput, setAdditionalNotesInput] = useState('');
+    const [phoneNumber, setPhoneNumber] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+
     const [nameError, setNameError] = useState('');
-    const [typeError, setTypeError] = useState('');
     const [dateError, setDateError] = useState('');
-    const [menuVisible, setMenuVisible] = useState(false);
+
     const formatDateYMD = (date: Date) => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}/${month}/${day}`;
     };
+
     const [birthDate, setBirthDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [dateInputValue, setDateInputValue] = useState(formatDateYMD(new Date()));
 
     const selectedDependent = useMemo(() => {
-        if (!dependentId) return undefined;
-        return getDependentById(dependentId);
-    }, [dependentId, getDependentById]);
+        if (!dependentIdParam) return undefined;
+        return getDependentById(dependentIdParam);
+    }, [dependentIdParam, getDependentById]);
+
+    const resolveDependentNumericId = () => {
+        const byParam = Number.parseInt(dependentIdParam?.replace('dep-', '') || '', 10);
+        if (!Number.isNaN(byParam)) {
+            return byParam;
+        }
+
+        if (selectedDependent?.dependentId) {
+            return selectedDependent.dependentId;
+        }
+
+        return null;
+    };
+
+    useEffect(() => {
+        if (!selectedDependent && dependentIdParam) {
+            fetchMyDependents();
+        }
+    }, [selectedDependent, dependentIdParam]);
 
     useEffect(() => {
         if (!selectedDependent) {
             return;
         }
 
-        setFullName(selectedDependent.name);
-        setDependentType(selectedDependent.type);
-        setCareNotesInput(selectedDependent.careNotes);
-        setAdditionalNotesInput(selectedDependent.notes);
-        setDateInputValue(selectedDependent.birthDate);
+        const fallbackNameParts = selectedDependent.name.split(' ').filter(Boolean);
+
+        setFirstName(selectedDependent.firstName || fallbackNameParts[0] || '');
+        setMiddleName(selectedDependent.middleName || '');
+        setLastName(selectedDependent.lastName || fallbackNameParts.slice(1).join(' ') || '');
+        setUsername(selectedDependent.username || '');
+        setEmail(selectedDependent.email || '');
+        setSex(selectedDependent.sex ? `${selectedDependent.sex.charAt(0).toUpperCase()}${selectedDependent.sex.slice(1)}` : 'Select Sex');
+        setCareNotesInput(selectedDependent.careNotes || '');
+        setPhoneNumber(selectedDependent.phoneNumber || '');
+        setDateInputValue(selectedDependent.birthDate || formatDateYMD(new Date()));
 
         const match = selectedDependent.birthDate.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
         if (!match) return;
+
         const year = parseInt(match[1], 10);
         const month = parseInt(match[2], 10);
         const day = parseInt(match[3], 10);
         const parsedDate = new Date(year, month - 1, day);
+
         if (!isNaN(parsedDate.getTime())) {
             setBirthDate(parsedDate);
         }
@@ -101,27 +139,58 @@ export default function EditDependentScreen() {
         }
     };
 
-    const handleUpdateDependent = () => {
-        const trimmedName = fullName.trim();
+    const handleUpdateDependent = async () => {
+        const fullName = `${firstName} ${middleName} ${lastName}`.replace(/\s+/g, ' ').trim();
         const isDateValid = /^(\d{4})\/(\d{2})\/(\d{2})$/.test(dateInputValue);
+        const numericDependentId = resolveDependentNumericId();
 
-        setNameError(trimmedName ? '' : 'Full name is required.');
-        setTypeError(dependentType ? '' : 'Dependent type is required.');
+        setNameError(fullName ? '' : 'First name and last name are required.');
         setDateError(isDateValid ? '' : 'Please enter a valid date in YYYY/MM/DD format.');
 
-        if (!trimmedName || !dependentType || !isDateValid || !dependentId) {
+        if (!fullName || !isDateValid) {
             return;
         }
 
-        updateDependent(dependentId, {
-            name: trimmedName,
-            type: dependentType,
-            birthDate: dateInputValue,
-            careNotes: careNotesInput.trim(),
-            notes: additionalNotesInput.trim(),
-        });
+        if (!username.trim() || !email.trim()) {
+            Alert.alert('Missing Fields', 'Username and email are required.');
+            return;
+        }
 
-        router.back();
+        if (sex === 'Select Sex') {
+            Alert.alert('Missing Field', 'Please select sex.');
+            return;
+        }
+
+        if (!numericDependentId) {
+            Alert.alert('Missing Data', 'Unable to resolve dependent ID for update. Please refresh and try again.');
+            return;
+        }
+
+        const birthdateForApi = dateInputValue.replace(/\//g, '-');
+
+        const requestBody = {
+            care_notes: careNotesInput.trim(),
+            first_name: firstName.trim(),
+            middle_name: middleName.trim() || undefined,
+            last_name: lastName.trim(),
+            username: username.trim(),
+            email: email.trim(),
+            sex: sex.toLowerCase(),
+            birthdate: birthdateForApi,
+            phone_number: phoneNumber.trim() || undefined,
+        };
+
+        try {
+            setSubmitting(true);
+            await updateDependentProfile(numericDependentId, requestBody);
+
+            Alert.alert('Success', 'Dependent profile updated successfully.');
+            router.back();
+        } catch (err) {
+            Alert.alert('Update Failed', (err as Error).message || 'Unable to update dependent profile.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -142,146 +211,197 @@ export default function EditDependentScreen() {
                             </View>
                         ) : (
                             <>
-                        <View style={styles.headerContainer}>
-                            <Pressable onPress={() => router.back()} hitSlop={12}>
-                                <Feather name="arrow-left" size={24} color="black" />
-                            </Pressable>
-                            <View>
-                                <Text style={styles.headerTitle}>Edit Dependent</Text>
-                                <Text style={styles.subHeader}>Update dependent information</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.dependentInfoContainer}>
-                            <Text style={styles.containerTitle}>Personal Information</Text>
-                            <Text style={styles.inputLabel}>Full Name *</Text>
-                            <TextInput
-                                autoCapitalize="none"
-                                keyboardType="default"
-                                placeholder="Enter Full Name"
-                                value={fullName}
-                                onChangeText={(text) => {
-                                    setFullName(text);
-                                    if (nameError) setNameError('');
-                                }}
-                                mode="outlined"
-                                activeOutlineColor="#6d28d9"
-                                outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                style={[styles.input, styles.inputField]}
-                            />
-                            {!!nameError && <Text style={styles.errorText}>{nameError}</Text>}
-
-                            {/* This is for the drop down */}
-                            <Text style={styles.inputLabel}>Type *</Text>
-                            <Menu
-                                visible={menuVisible}
-                                onDismiss={() => setMenuVisible(false)}
-                                anchor={
-                                    <Pressable onPress={() => setMenuVisible(true)}>
-                                        <TextInput
-                                            // label="Dependent"
-                                            value={dependentType || 'Select Dependent Type'}
-                                            mode="outlined"
-                                            editable={false}
-                                            pointerEvents="none"
-                                            textColor={dependentType ? '#000000' : '#7a7979'}
-                                            right={<TextInput.Icon icon="menu-down" />}
-                                            outlineStyle={{ borderRadius: 16, borderWidth: 1.5 }}
-                                            style={styles.inputField}
-                                        />
+                                <View style={styles.headerContainer}>
+                                    <Pressable onPress={() => router.back()} hitSlop={12}>
+                                        <Feather name="arrow-left" size={24} color="black" />
                                     </Pressable>
-                                }
-                                contentStyle={styles.dropdownContent}
-                                style={styles.dropdown}
-                            >
-                                <Menu.Item onPress={() => { setDependentType('General'); setTypeError(''); setMenuVisible(false); }} title="General" titleStyle={styles.dropdownItemText} />
-                                <Menu.Item onPress={() => { setDependentType('Child'); setTypeError(''); setMenuVisible(false); }} title="Child" titleStyle={styles.dropdownItemText} />
-                                <Menu.Item onPress={() => { setDependentType('Elderly'); setTypeError(''); setMenuVisible(false); }} title="Elderly" titleStyle={styles.dropdownItemText} />
-                                <Menu.Item onPress={() => { setDependentType('Special Needs'); setTypeError(''); setMenuVisible(false); }} title="Special Needs" titleStyle={styles.dropdownItemText} />
-                            </Menu>
-                            {!!typeError && <Text style={styles.errorText}>{typeError}</Text>}
+                                    <View>
+                                        <Text style={styles.headerTitle}>Edit Dependent</Text>
+                                        <Text style={styles.subHeader}>Update dependent information</Text>
+                                    </View>
+                                </View>
 
-                            {/* Birthday */}
-                            <Text style={styles.inputLabel}>Date of Birth *</Text>
-                            <View style={styles.datePickerContainer}>
-                                <TextInput
-                                    value={dateInputValue}
-                                    onChangeText={(text) => {
-                                        handleManualDateInput(text);
-                                        if (dateError) setDateError('');
-                                    }}
-                                    mode="outlined"
-                                    editable={true}
-                                    keyboardType="number-pad"
-                                    placeholder="YYYY/MM/DD"
-                                    right={<TextInput.Icon icon="calendar" onPress={() => {
-                                        if (isDatePickerSupported) {
-                                            setShowDatePicker(true);
-                                        }
-                                    }} />}
-                                    outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                    style={styles.inputField}
-                                />
-                            </View>
-                            {!!dateError && <Text style={styles.errorText}>{dateError}</Text>}
+                                <View style={styles.dependentInfoContainer}>
+                                    <Text style={styles.containerTitle}>Personal Information</Text>
 
-                            {/* care notes */}
-                            <Text style={styles.inputLabel}>Care Notes</Text>
-                            <TextInput
-                                // label="Task Description" 
-                                autoCapitalize="none"
-                                keyboardType="default"
-                                placeholder="Allergies, medications, conditions, etc."
-                                value={careNotesInput}
-                                onChangeText={setCareNotesInput}
-                                mode="outlined"
-                                activeOutlineColor="#6d28d9"
-                                outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                multiline={true}
-                                numberOfLines={4}
-                                style={[styles.inputFieldLarge]}
-                            />
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputTitle}>First Name *</Text>
+                                        <TextInput
+                                            placeholder="First Name"
+                                            placeholderTextColor="#9CA3AF"
+                                            mode="outlined"
+                                            activeOutlineColor="#6d28d9"
+                                            outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                            style={[styles.input, styles.inputField]}
+                                            value={firstName}
+                                            onChangeText={setFirstName}
+                                        />
+                                    </View>
 
-                            {/* additional info */}
-                            <Text style={styles.inputLabel}>Additional Notes</Text>
-                            <TextInput
-                                // label="Task Description" 
-                                autoCapitalize="none"
-                                keyboardType="default"
-                                placeholder="Preferences, routines, special needs, etc."
-                                value={additionalNotesInput}
-                                onChangeText={setAdditionalNotesInput}
-                                mode="outlined"
-                                activeOutlineColor="#6d28d9"
-                                outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                multiline={true}
-                                numberOfLines={4}
-                                style={[styles.inputFieldLarge]}
-                            />
-                            
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
-                                <Pressable
-                                    onPress={handleUpdateDependent}
-                                    style={({ pressed }) => [
-                                        styles.primaryButton,
-                                        { opacity: pressed ? 0.5 : 1 },
-                                    ]}
-                                >
-                                    <Text style={styles.primaryButtonText}>Save Changes</Text>
-                                </Pressable>
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputTitle}>Middle Name (Optional)</Text>
+                                        <TextInput
+                                            placeholder="Middle Name"
+                                            placeholderTextColor="#9CA3AF"
+                                            mode="outlined"
+                                            activeOutlineColor="#6d28d9"
+                                            outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                            style={[styles.input, styles.inputField]}
+                                            value={middleName}
+                                            onChangeText={setMiddleName}
+                                        />
+                                    </View>
 
-                                <Pressable
-                                    onPress={() => router.back()}
-                                    style={({ pressed }) => [
-                                        styles.secondaryButton,
-                                        { opacity: pressed ? 0.5 : 1 },
-                                    ]}
-                                >
-                                    <Text style={styles.secondaryButtonText}>Cancel</Text>
-                                </Pressable>
-                            </View>
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputTitle}>Last Name *</Text>
+                                        <TextInput
+                                            placeholder="Last Name"
+                                            placeholderTextColor="#9CA3AF"
+                                            mode="outlined"
+                                            activeOutlineColor="#6d28d9"
+                                            outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                            style={[styles.input, styles.inputField]}
+                                            value={lastName}
+                                            onChangeText={setLastName}
+                                        />
+                                    </View>
+                                    {!!nameError && <Text style={styles.errorText}>{nameError}</Text>}
 
-                        </View>
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputTitle}>Username *</Text>
+                                        <TextInput
+                                            placeholder="Username"
+                                            placeholderTextColor="#9CA3AF"
+                                            mode="outlined"
+                                            activeOutlineColor="#6d28d9"
+                                            outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                            style={[styles.input, styles.inputField]}
+                                            value={username}
+                                            onChangeText={setUsername}
+                                        />
+                                    </View>
+
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputTitle}>Email *</Text>
+                                        <TextInput
+                                            placeholder="example@email.com"
+                                            placeholderTextColor="#9CA3AF"
+                                            keyboardType="email-address"
+                                            mode="outlined"
+                                            activeOutlineColor="#6d28d9"
+                                            outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                            style={[styles.input, styles.inputField]}
+                                            value={email}
+                                            onChangeText={setEmail}
+                                        />
+                                    </View>
+
+                                    <Text style={styles.inputLabel}>Date of Birth *</Text>
+                                    <View style={styles.datePickerContainer}>
+                                        <TextInput
+                                            value={dateInputValue}
+                                            onChangeText={(text) => {
+                                                handleManualDateInput(text);
+                                                if (dateError) setDateError('');
+                                            }}
+                                            mode="outlined"
+                                            editable={true}
+                                            keyboardType="number-pad"
+                                            placeholder="YYYY/MM/DD"
+                                            placeholderTextColor="#9CA3AF"
+                                            right={<TextInput.Icon icon="calendar" onPress={() => {
+                                                if (isDatePickerSupported) {
+                                                    setShowDatePicker(true);
+                                                }
+                                            }} />}
+                                            activeOutlineColor="#6d28d9"
+                                            outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                            style={[styles.input, styles.inputField]}
+                                        />
+                                    </View>
+                                    {!!dateError && <Text style={styles.errorText}>{dateError}</Text>}
+
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputTitle}>Sex *</Text>
+                                        <Menu
+                                            visible={sexMenuVisible}
+                                            onDismiss={() => setSexMenuVisible(false)}
+                                            anchor={
+                                                <Pressable onPress={() => setSexMenuVisible(true)}>
+                                                    <TextInput
+                                                        value={sex}
+                                                        editable={false}
+                                                        mode="outlined"
+                                                        pointerEvents="none"
+                                                        right={<TextInput.Icon icon="menu-down" />}
+                                                        outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                                        style={styles.inputField}
+                                                    />
+                                                </Pressable>
+                                            }
+                                            contentStyle={styles.dropdownContent}
+                                            style={styles.dropdownSmall}
+                                        >
+                                            <Menu.Item onPress={() => { setSex('Female'); setSexMenuVisible(false); }} title="Female" />
+                                            <Menu.Item onPress={() => { setSex('Male'); setSexMenuVisible(false); }} title="Male" />
+                                            <Menu.Item onPress={() => { setSex('Other'); setSexMenuVisible(false); }} title="Other" />
+                                        </Menu>
+                                    </View>
+
+                                    <Text style={styles.inputLabel}>Phone Number (Optional)</Text>
+                                    <TextInput
+                                        placeholder="09123456789"
+                                        placeholderTextColor="#9CA3AF"
+                                        keyboardType="phone-pad"
+                                        mode="outlined"
+                                        activeOutlineColor="#6d28d9"
+                                        outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                        style={[styles.input, styles.inputField]}
+                                        value={phoneNumber}
+                                        onChangeText={setPhoneNumber}
+                                    />
+
+                                    <Text style={styles.inputLabel}>Care Notes</Text>
+                                    <TextInput
+                                        autoCapitalize="none"
+                                        keyboardType="default"
+                                        placeholder="Allergies, medications, conditions, etc."
+                                        placeholderTextColor="#9CA3AF"
+                                        value={careNotesInput}
+                                        onChangeText={setCareNotesInput}
+                                        mode="outlined"
+                                        activeOutlineColor="#6d28d9"
+                                        outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                        multiline={true}
+                                        numberOfLines={4}
+                                        style={[styles.inputFieldLarge]}
+                                    />
+
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, gap: 10 }}>
+                                        <Pressable
+                                            onPress={() => router.back()}
+                                            style={({ pressed }) => [
+                                                styles.secondaryButton,
+                                                { opacity: pressed ? 0.5 : 1 },
+                                            ]}
+                                            disabled={submitting}
+                                        >
+                                            <Text style={styles.secondaryButtonText}>Cancel</Text>
+                                        </Pressable>
+
+                                        <Pressable
+                                            onPress={handleUpdateDependent}
+                                            style={({ pressed }) => [
+                                                styles.primaryButton,
+                                                { opacity: pressed ? 0.5 : 1 },
+                                            ]}
+                                            disabled={submitting}
+                                        >
+                                            <Text style={styles.primaryButtonText}>{submitting ? 'Saving...' : 'Save Changes'}</Text>
+                                        </Pressable>
+                                    </View>
+
+                                </View>
                             </>
                         )}
                     </SafeAreaView>
@@ -338,86 +458,80 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#000000',
         fontWeight: '500',
+        marginBottom: 6,
     },
     inputLabel: {
-        padding: 10,
-        paddingLeft: 0,
+        paddingTop: 10,
+        paddingBottom: 8,
         fontSize: 14,
-        fontWeight: 600,
-        color: "#707070",
+        fontWeight: '600',
+        color: '#707070',
     },
-
+    inputTitle: {
+        paddingBottom: 8,
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#707070',
+    },
+    inputGroup: {
+        paddingTop: 8,
+    },
     input: {
         marginTop: 0,
     },
-
     inputField: {
-        backgroundColor: "#ffffff",
-        height: 45,  // to adjust the input smaller or bigger
+        backgroundColor: '#ffffff',
+        height: 45,
     },
-
-    dropdown: {
-        padding: 12,
+    dropdownSmall: {
+        width: "85%",
         borderRadius: 16,
-        width: "89%",
-        marginLeft: -10,
-        marginTop: 40,
+        marginTop: 50,
         marginVertical: 5,
     },
-
     dropdownContent: {
-        backgroundColor: "#ffffff",
+        backgroundColor: '#ffffff',
         borderRadius: 12,
     },
-
-    dropdownItemText: {
-        color: "#000000",
-    },
-
     datePickerContainer: {
         width: '100%',
     },
-
     inputFieldLarge: {
-        backgroundColor: "#ffffff",
-        height: 120,  // Larger height for descriptions
-        textAlignVertical: "top",
+        backgroundColor: '#ffffff',
+        height: 120,
+        textAlignVertical: 'top',
+        marginTop: 4,
     },
-
     primaryButton: {
         flex: 1,
         height: 44,
         borderRadius: 16,
-        backgroundColor: "#7C6FDC",
-        justifyContent: "center",
-        alignItems: "center",
+        backgroundColor: '#7C6FDC',
+        justifyContent: 'center',
+        alignItems: 'center',
         marginRight: 8,
     },
-
     primaryButtonText: {
-        color: "#ffffff",
+        color: '#ffffff',
         fontSize: 15,
-        fontWeight: "600",
+        fontWeight: '600',
     },
-
     secondaryButton: {
         flex: 1,
         height: 44,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: "#7C6FDC",
-        backgroundColor: "#ffffff",
-        justifyContent: "center",
-        alignItems: "center",
+        borderColor: '#7C6FDC',
+        backgroundColor: '#ffffff',
+        justifyContent: 'center',
+        alignItems: 'center',
         marginLeft: 8,
     },
-
     secondaryButtonText: {
-        color: "#3f2f8f",
+        color: '#3f2f8f',
         fontSize: 15,
-        fontWeight: "500",
+        fontWeight: '500',
     },
-
     errorText: {
         color: '#D14343',
         fontSize: 12,

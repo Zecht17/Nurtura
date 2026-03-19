@@ -1,22 +1,23 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
 import {
-    Pressable,
-    StyleProp,
-    StyleSheet,
-    Text,
-    View,
-    ViewStyle,
+	Pressable,
+	StyleProp,
+	StyleSheet,
+	Text,
+	View,
+	ViewStyle,
 } from "react-native";
 
 type Props = {
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
+  href?: "/(tabs)/tasks" | "/dependentAccount";
+  label?: string;
 };
 
-export default function ViewTaskButton({ onPress, style }: Props) {
-  return (
-    <Link href="/(tabs)/tasks" asChild>
+function ViewTaskButtonContent({ onPress, style, label = "View Task" }: Props) {
+    return (
       <Pressable
         onPress={onPress}
         style={({ pressed }) => [
@@ -33,12 +34,23 @@ export default function ViewTaskButton({ onPress, style }: Props) {
         >
           <View style={styles.addButton}>
             {/* <AntDesign name="plus" size={18} color="white" /> */}
-            <Text style={styles.addText}>View Task</Text>
+            <Text style={styles.addText}>{label}</Text>
           </View>
         </LinearGradient>
       </Pressable>
-    </Link>
-  );
+    );
+}
+
+export default function ViewTaskButton({ onPress, style, href, label }: Props) {
+  if (href) {
+    return (
+      <Link href={href} asChild>
+        <ViewTaskButtonContent onPress={onPress} style={style} label={label} />
+      </Link>
+    );
+  }
+
+  return <ViewTaskButtonContent onPress={onPress} style={style} label={label} />;
 }
 
 const styles = StyleSheet.create({

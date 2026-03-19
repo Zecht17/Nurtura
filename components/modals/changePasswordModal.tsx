@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { TextInput } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type ChangePasswordModalProps = {
@@ -13,6 +14,9 @@ export default function ChangePasswordModal({ visible, onClose, onSubmit }: Chan
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [currentPasswordVisible, setCurrentPasswordVisible] = useState(false);
+    const [newPasswordVisible, setNewPasswordVisible] = useState(false);
+    const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
 
@@ -24,6 +28,9 @@ export default function ChangePasswordModal({ visible, onClose, onSubmit }: Chan
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
+        setCurrentPasswordVisible(false);
+        setNewPasswordVisible(false);
+        setConfirmPasswordVisible(false);
         setFormError(null);
         setIsSubmitting(false);
     }, [visible]);
@@ -70,10 +77,13 @@ export default function ChangePasswordModal({ visible, onClose, onSubmit }: Chan
                                         style={styles.input}
                                         placeholder="Enter current password"
                                         placeholderTextColor="#7c7a87"
-                                        secureTextEntry
+                                        mode="outlined"
+                                        secureTextEntry={!currentPasswordVisible}
                                         value={currentPassword}
                                         onChangeText={setCurrentPassword}
                                         editable={!isSubmitting}
+                                        right={<TextInput.Icon icon={currentPasswordVisible ? "eye-off" : "eye"} onPress={() => setCurrentPasswordVisible((prev) => !prev)} forceTextInputFocus={false} />}
+                                        outlineStyle={styles.inputOutline}
                                     />
                                 </View>
 
@@ -83,10 +93,13 @@ export default function ChangePasswordModal({ visible, onClose, onSubmit }: Chan
                                         style={styles.input}
                                         placeholder="Enter new password"
                                         placeholderTextColor="#7c7a87"
-                                        secureTextEntry
+                                        mode="outlined"
+                                        secureTextEntry={!newPasswordVisible}
                                         value={newPassword}
                                         onChangeText={setNewPassword}
                                         editable={!isSubmitting}
+                                        right={<TextInput.Icon icon={newPasswordVisible ? "eye-off" : "eye"} onPress={() => setNewPasswordVisible((prev) => !prev)} forceTextInputFocus={false} />}
+                                        outlineStyle={styles.inputOutline}
                                     />
                                 </View>
 
@@ -96,10 +109,13 @@ export default function ChangePasswordModal({ visible, onClose, onSubmit }: Chan
                                         style={styles.input}
                                         placeholder="Re-enter new password"
                                         placeholderTextColor="#7c7a87"
-                                        secureTextEntry
+                                        mode="outlined"
+                                        secureTextEntry={!confirmPasswordVisible}
                                         value={confirmPassword}
                                         onChangeText={setConfirmPassword}
                                         editable={!isSubmitting}
+                                        right={<TextInput.Icon icon={confirmPasswordVisible ? "eye-off" : "eye"} onPress={() => setConfirmPasswordVisible((prev) => !prev)} forceTextInputFocus={false} />}
+                                        outlineStyle={styles.inputOutline}
                                     />
                                 </View>
                             </ScrollView>
@@ -173,14 +189,15 @@ const styles = StyleSheet.create({
         fontWeight: "600",
     },
     input: {
-        borderWidth: 1,
-        borderColor: "#e8e6f2",
         backgroundColor: "#f6f4ff",
         borderRadius: 14,
-        paddingVertical: 12,
-        paddingHorizontal: 14,
         fontSize: 15,
         color: "#111",
+    },
+    inputOutline: {
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: "#e8e6f2",
     },
     buttonRow: {
         flexDirection: "row",

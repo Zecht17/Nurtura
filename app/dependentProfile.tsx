@@ -1,21 +1,31 @@
 import AddDependentsButton from "@/components/buttons/addDependents";
-import ChildDependentCard from "@/components/cards/childDependent";
-import ElderlyDependentCard from "@/components/cards/elderlyDependent";
-import GeneralDependentCard from "@/components/cards/generalDependent";
+import DependentCard from "@/components/cards/dependentCard";
 import { NoDependentCard } from "@/components/cards/noDependent";
-import SpecialDependentCard from "@/components/cards/specialDependent";
+import DeleteDependentModal from "@/components/modals/deleteDependent";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import React from "react";
-import { ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Dependent, useDependents } from "../context/DependentContext";
 
 export default function dependentProfile() {
-    const { dependents: dependentList } = useDependents();
+    const { dependents: dependentList, loadingDependents, dependentsError, fetchMyDependents, deleteDependentProfile } = useDependents();
     const router = useRouter();
+    const pathname = usePathname();
+    const typeLabelSet = new Set(['General', 'Child', 'Elderly', 'Special Needs']);
+    const [deleteTarget, setDeleteTarget] = React.useState<Dependent | null>(null);
+    const [deleteLoading, setDeleteLoading] = React.useState(false);
 
     StatusBar.setBarStyle("dark-content");
+
+    React.useEffect(() => {
+        if (pathname !== '/dependentProfile') {
+            return;
+        }
+
+        fetchMyDependents();
+    }, [pathname, fetchMyDependents]);
 
     const getAge = (birthDate: string) => {
         const match = birthDate.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
@@ -37,34 +47,79 @@ export default function dependentProfile() {
         return age < 0 ? 0 : age;
     };
 
-    const renderDependentCard = (dependent: Dependent) => {
-        const commonProps = {
-            key: dependent.id,
-            name: dependent.name,
-            age: getAge(dependent.birthDate),
-            birthday: dependent.birthDate,
-            careNotes: dependent.careNotes || 'No care notes added.',
-            notes: dependent.notes || 'No additional notes added.',
-            onEdit: () => router.push({ pathname: '/editDependent', params: { dependentId: dependent.id } }),
-        };
-
-        switch (dependent.type) {
-            case 'Child':
-                return <ChildDependentCard {...commonProps} />;
-            case 'Elderly':
-                return <ElderlyDependentCard {...commonProps} />;
-            case 'Special Needs':
-                return <SpecialDependentCard {...commonProps} />;
-            case 'General':
-            default:
-                return <GeneralDependentCard {...commonProps} />;
+    const resolveDependentNumericId = (dependent: Dependent) => {
+        if (typeof dependent.dependentId === 'number') {
+            return dependent.dependentId;
         }
+
+        const parsed = Number.parseInt(dependent.id.replace('dep-', ''), 10);
+        return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!deleteTarget) {
+            return;
+        }
+
+        const dependentNumericId = resolveDependentNumericId(deleteTarget);
+
+        if (!dependentNumericId) {
+            Alert.alert('Delete Failed', 'Unable to resolve dependent ID for deletion.');
+            setDeleteTarget(null);
+            return;
+        }
+
+        try {
+            setDeleteLoading(true);
+            const message = await deleteDependentProfile(dependentNumericId);
+            setDeleteTarget(null);
+            Alert.alert('Deleted', message || 'Dependent profile deleted successfully.');
+        } catch (err) {
+            Alert.alert('Delete Failed', (err as Error).message || 'Unable to delete dependent profile.');
+        } finally {
+            setDeleteLoading(false);
+        }
+    };
+
+    const renderDependentCard = (dependent: Dependent) => {
+        const safeUsername = dependent.username && !typeLabelSet.has(dependent.username)
+            ? dependent.username
+            : '-';
+
+        return (
+            <DependentCard
+                key={dependent.id}
+                fullName={dependent.name}
+                username={safeUsername}
+                age={getAge(dependent.birthDate)}
+                careNotes={dependent.careNotes || 'No care notes added.'}
+                onOpenProfile={() =>
+                    router.push({
+                        pathname: '/dependentAccount',
+                        params: { dependentId: dependent.dependentId ? `dep-${dependent.dependentId}` : dependent.id },
+                    })
+                }
+                onEdit={() =>
+                    router.push({
+                        pathname: '/editDependent',
+                        params: { dependentId: dependent.dependentId ? `dep-${dependent.dependentId}` : dependent.id },
+                    })
+                }
+                onDelete={() => setDeleteTarget(dependent)}
+            />
+        );
     };
 
     return (
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={{ flex: 1 }}>
             <SafeAreaView style={{ flex: 1 }}>
-                <ScrollView contentContainerStyle={dependents.scrollContent} showsVerticalScrollIndicator={false}>
+                <ScrollView
+                    contentContainerStyle={dependents.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={loadingDependents} onRefresh={fetchMyDependents} />
+                    }
+                >
                     <View style={dependents.container}>
                         <View style={dependents.headerContainer}>
                             <View>
@@ -73,6 +128,18 @@ export default function dependentProfile() {
                             </View>
                             <AddDependentsButton />
                         </View>
+
+                        {!!dependentsError && (
+                            <View style={dependents.errorContainer}>
+                                <Text style={dependents.errorText}>{dependentsError}</Text>
+                            </View>
+                        )}
+
+                        {loadingDependents && dependentList.length === 0 && (
+                            <View style={dependents.loadingContainer}>
+                                <ActivityIndicator size="large" color="#7C6FDC" />
+                            </View>
+                        )}
 
                         {dependentList.length === 0 ? (
                             <View style={dependents.emptyStateContainer}>
@@ -84,6 +151,19 @@ export default function dependentProfile() {
 
                     </View>
                 </ScrollView>
+
+                <DeleteDependentModal
+                    visible={!!deleteTarget}
+                    dependentName={deleteTarget?.name}
+                    loading={deleteLoading}
+                    onConfirm={handleConfirmDelete}
+                    onCancel={() => {
+                        if (deleteLoading) {
+                            return;
+                        }
+                        setDeleteTarget(null);
+                    }}
+                />
 
             </SafeAreaView>
         </LinearGradient>
@@ -104,6 +184,23 @@ const dependents = StyleSheet.create({
     emptyStateContainer: {
         marginHorizontal: 15,
         marginTop: 10,
+    },
+
+    loadingContainer: {
+        marginTop: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    errorContainer: {
+        marginHorizontal: 15,
+        marginTop: 8,
+        marginBottom: 4,
+    },
+
+    errorText: {
+        color: '#D14343',
+        fontSize: 13,
     },
 
     headerContainer: {

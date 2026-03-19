@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Octicons from '@expo/vector-icons/Octicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
@@ -127,7 +128,7 @@ export default function ProfileAndAccount() {
                 <View style={{ paddingBottom: 15 }}>
                     <Text style={profile.accCredTitle}>Username:</Text>
                     <View style={profile.inputContainer}>
-                        <Ionicons name="person-outline" size={16} color="#7C6FDC" />
+                        <Octicons name="person" size={16} color="#7C6FDC" />
                         <Text style={profile.accCredInfo}>{profileData?.username || user?.username || '-'}</Text>
                     </View>
                 </View>
@@ -135,15 +136,23 @@ export default function ProfileAndAccount() {
                 <View style={{ paddingBottom: 15 }}>
                     <Text style={profile.accCredTitle}>First Name:</Text>
                     <View style={profile.inputContainer}>
-                        <Ionicons name="person-outline" size={16} color="#7C6FDC" />
+                        <Octicons name="person" size={16} color="#7C6FDC" />
                         <Text style={profile.accCredInfo}>{profileData?.first_name || '-'}</Text>
+                    </View>
+                </View>
+
+                <View style={{ paddingBottom: 15 }}>
+                    <Text style={profile.accCredTitle}>Middle Name:</Text>
+                    <View style={profile.inputContainer}>
+                        <Octicons name="person" size={16} color="#7C6FDC" />
+                        <Text style={profile.accCredInfo}>{profileData?.middle_name || '-'}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
                     <Text style={profile.accCredTitle}>Last Name:</Text>
                     <View style={profile.inputContainer}>
-                        <Ionicons name="person-outline" size={16} color="#7C6FDC" />
+                        <Octicons name="person" size={16} color="#7C6FDC" />
                         <Text style={profile.accCredInfo}>{profileData?.last_name || '-'}</Text>
                     </View>
                 </View>
@@ -151,7 +160,7 @@ export default function ProfileAndAccount() {
                 <View style={{ paddingBottom: 15 }}>
                     <Text style={profile.accCredTitle}>Full Name:</Text>
                     <View style={profile.inputContainer}>
-                        <Ionicons name="person-outline" size={16} color="#7C6FDC" />
+                        <Octicons name="person" size={16} color="#7C6FDC" />
                         <Text style={profile.accCredInfo}>{fullName}</Text>
                     </View>
                 </View>

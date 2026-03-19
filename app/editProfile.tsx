@@ -12,8 +12,9 @@ import {
     StyleSheet,
     View,
 } from 'react-native';
-import { Button, Text, TextInput } from 'react-native-paper';
+import { Button, Menu, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import CustomDatePickerModal from '../components/modals/CustomDatePickerModal';
 import { useUser } from '../context/UserContext';
 
 export default function EditProfileScreen() {
@@ -34,8 +35,12 @@ export default function EditProfileScreen() {
     const [email, setEmail] = useState('');
     const [sex, setSex] = useState('');
     const [birthdate, setBirthdate] = useState('');
+    const [birthDateValue, setBirthDateValue] = useState(new Date());
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [sexMenuVisible, setSexMenuVisible] = useState(false);
     const [phoneNumber, setPhoneNumber] = useState('');
     const [formError, setFormError] = useState<string | null>(null);
+    const isDatePickerSupported = Platform.OS !== 'web';
 
     useEffect(() => {
         if (!profileData) {
@@ -50,6 +55,11 @@ export default function EditProfileScreen() {
         setSex(profileData.sex || '');
         setBirthdate(profileData.birthdate || '');
         setPhoneNumber(profileData.phone_number || '');
+
+        const parsedBirthdate = new Date(profileData.birthdate || '');
+        if (!Number.isNaN(parsedBirthdate.getTime())) {
+            setBirthDateValue(parsedBirthdate);
+        }
     }, [profileData]);
 
     const handleBirthdateChange = (value: string) => {
@@ -65,6 +75,37 @@ export default function EditProfileScreen() {
         }
 
         setBirthdate(formatted);
+
+        const match = formatted.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) {
+            return;
+        }
+
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10);
+        const day = parseInt(match[3], 10);
+        const parsedDate = new Date(year, month - 1, day);
+
+        if (
+            !Number.isNaN(parsedDate.getTime()) &&
+            parsedDate.getFullYear() === year &&
+            parsedDate.getMonth() === month - 1 &&
+            parsedDate.getDate() === day
+        ) {
+            setBirthDateValue(parsedDate);
+        }
+    };
+
+    const handleDateChange = (date: Date) => {
+        setBirthDateValue(date);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        setBirthdate(`${year}-${month}-${day}`);
+    };
+
+    const handleCloseDatePicker = () => {
+        setShowDatePicker(false);
     };
 
     const validateForm = () => {
@@ -210,16 +251,30 @@ export default function EditProfileScreen() {
                             />
 
                             <Text style={styles.inputTitle}>Sex</Text>
-                            <TextInput
-                                mode="outlined"
-                                value={sex}
-                                onChangeText={setSex}
-                                placeholder="male / female / other"
-                                autoCapitalize="none"
-                                style={styles.inputField}
-                                outlineStyle={styles.outline}
-                                disabled={profileLoading || updatingProfile}
-                            />
+                            <Menu
+                                visible={sexMenuVisible}
+                                onDismiss={() => setSexMenuVisible(false)}
+                                anchor={
+                                    <Pressable onPress={() => setSexMenuVisible(true)}>
+                                        <TextInput
+                                            mode="outlined"
+                                            value={sex ? `${sex.charAt(0).toUpperCase()}${sex.slice(1)}` : 'Select Sex'}
+                                            editable={false}
+                                            pointerEvents="none"
+                                            right={<TextInput.Icon icon="menu-down" />}
+                                            style={styles.inputField}
+                                            outlineStyle={styles.outline}
+                                            disabled={profileLoading || updatingProfile}
+                                        />
+                                    </Pressable>
+                                }
+                                contentStyle={styles.dropdownContent}
+                                style={styles.dropdownSmall}
+                            >
+                                <Menu.Item onPress={() => { setSex('female'); setSexMenuVisible(false); }} title="Female" />
+                                <Menu.Item onPress={() => { setSex('male'); setSexMenuVisible(false); }} title="Male" />
+                                <Menu.Item onPress={() => { setSex('other'); setSexMenuVisible(false); }} title="Other" />
+                            </Menu>
 
                             <Text style={styles.inputTitle}>Birthdate</Text>
                             <TextInput
@@ -228,6 +283,11 @@ export default function EditProfileScreen() {
                                 onChangeText={handleBirthdateChange}
                                 placeholder="YYYY-MM-DD"
                                 keyboardType="phone-pad"
+                                right={<TextInput.Icon icon="calendar" onPress={() => {
+                                    if (isDatePickerSupported) {
+                                        setShowDatePicker(true);
+                                    }
+                                }} />}
                                 style={styles.inputField}
                                 outlineStyle={styles.outline}
                                 disabled={profileLoading || updatingProfile}
@@ -268,6 +328,13 @@ export default function EditProfileScreen() {
                     </ScrollView>
                 </KeyboardAvoidingView>
             </SafeAreaView>
+
+            <CustomDatePickerModal
+                visible={isDatePickerSupported && showDatePicker}
+                date={birthDateValue}
+                onDateChange={handleDateChange}
+                onClose={handleCloseDatePicker}
+            />
         </LinearGradient>
     );
 }
@@ -338,6 +405,16 @@ const styles = StyleSheet.create({
     outline: {
         borderRadius: 12,
         borderWidth: 1.5,
+    },
+    dropdownSmall: {
+        width: "85%",
+        borderRadius: 16,
+        marginTop: 50,
+        marginVertical: 5,
+    },
+    dropdownContent: {
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
     },
     buttonRow: {
         flexDirection: 'row',
