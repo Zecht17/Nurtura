@@ -4,19 +4,43 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useMemo } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
+import { useUser } from "../context/UserContext";
+
+const formatDate = (value?: string) => {
+    if (!value) {
+        return "-";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+    });
+};
 
 export default function SettingsPage() {
 	const router = useRouter();
-    const firstName = "Juztine"; // TODO: Get from user context or auth
-    const lastName = "Miguel"; // TODO: Get from user context or auth
-    const email = "juztine.miguel@example.com"; // TODO: Get from user context or auth
-    const joinDate = "January 18, 2026"; // TODO: Get from user context or auth
-
     const { logout } = useAuth();
+    const { profileData, profileLoading, profileError } = useUser();
+
+    const fullName = useMemo(() => {
+        if (!profileData) {
+            return "-";
+        }
+
+        return [profileData.first_name, profileData.middle_name, profileData.last_name]
+            .filter(Boolean)
+            .join(" ");
+    }, [profileData]);
 
     const handleLogout = async () => {
         try {
@@ -43,25 +67,37 @@ export default function SettingsPage() {
             <View style={settings.accInfoContainer}>
                 <Text style={settings.accInfoTitle}>Account Information</Text>
                 <Text style={settings.accInfoSubTitle}>Your personal details</Text>
+
+                {profileLoading ? (
+                    <View style={settings.feedbackRow}>
+                        <ActivityIndicator size="small" color="#7C6FDC" />
+                        <Text style={settings.feedbackText}>Loading account data...</Text>
+                    </View>
+                ) : null}
+
+                {profileError ? (
+                    <Text style={settings.errorText}>{profileError}</Text>
+                ) : null}
+
                 {/* This is for the user information */}
                 <View style={{ paddingBottom: 15 }}>
                     <Text style={settings.accCredTitle}>Name:</Text>
                     <View style={settings.inputContainer}>
-                        <Text style={settings.accCredInfo}>{firstName} {lastName}</Text>
+                        <Text style={settings.accCredInfo}>{fullName}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
                     <Text style={settings.accCredTitle}>Email:</Text>
                     <View style={settings.inputContainer}>
-                        <Text style={settings.accCredInfo}>{email}</Text>
+                        <Text style={settings.accCredInfo}>{profileData?.email || "-"}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
                     <Text style={settings.accCredTitle}>Member Since:</Text>
                     <View style={settings.inputContainer}>
-                        <Text style={settings.accCredInfo}>{joinDate}</Text>
+                        <Text style={settings.accCredInfo}>{formatDate(profileData?.created_at)}</Text>
                     </View>
                 </View>
             </View>
@@ -169,6 +205,24 @@ const settings = StyleSheet.create({
         paddingHorizontal: 8,
         // paddingBottom: 15,
 
+    },
+
+    feedbackRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 12,
+    },
+
+    feedbackText: {
+        color: "#4b4b4b",
+        fontSize: 14,
+    },
+
+    errorText: {
+        color: "#b91c1c",
+        marginBottom: 12,
+        fontSize: 13,
     },
 
     editButton: {

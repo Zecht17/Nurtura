@@ -1,11 +1,11 @@
-import React, { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type ChangePasswordModalProps = {
     visible: boolean;
     onClose: () => void;
-    onSubmit?: (payload: { currentPassword: string; newPassword: string; confirmPassword: string }) => void;
+    onSubmit?: (payload: { currentPassword: string; newPassword: string; confirmPassword: string }) => Promise<void> | void;
 };
 
 export default function ChangePasswordModal({ visible, onClose, onSubmit }: ChangePasswordModalProps) {
@@ -13,75 +13,117 @@ export default function ChangePasswordModal({ visible, onClose, onSubmit }: Chan
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
 
-    const handleUpdate = () => {
-        onSubmit?.({ currentPassword, newPassword, confirmPassword });
-        // Keep modal behavior simple; close after submit for now
-        onClose();
+    useEffect(() => {
+        if (visible) {
+            return;
+        }
+
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setFormError(null);
+        setIsSubmitting(false);
+    }, [visible]);
+
+    const handleUpdate = async () => {
+        if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+            setFormError("All password fields are required.");
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setFormError("New password and confirm password do not match.");
+            return;
+        }
+
+        setFormError(null);
+        setIsSubmitting(true);
+
+        try {
+            await onSubmit?.({ currentPassword, newPassword, confirmPassword });
+            onClose();
+        } catch (err) {
+            setFormError((err as Error).message || "Unable to change password.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
         <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
-            <View style={styles.backdrop}>
-                <View style={styles.sheetContainer}>
-                    <View style={styles.card}>
-                        <Text style={styles.title}>Security</Text>
-                        <Text style={styles.subtitle}>Manage your password and security settings</Text>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalRoot}>
+                <View style={styles.backdrop}>
+                    <View style={styles.sheetContainer}>
+                        <View style={[styles.card, { paddingBottom: 20 + insets.bottom }]}> 
+                            <Text style={styles.title}>Security</Text>
+                            <Text style={styles.subtitle}>Manage your password and security settings</Text>
 
-                        <ScrollView contentContainerStyle={styles.form}>
-                            <View style={styles.fieldGroup}>
-                                <Text style={styles.label}>Current Password</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Enter current password"
-                                    placeholderTextColor="#7c7a87"
-                                    secureTextEntry
-                                    value={currentPassword}
-                                    onChangeText={setCurrentPassword}
-                                />
+                            {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
+
+                            <ScrollView contentContainerStyle={styles.form}>
+                                <View style={styles.fieldGroup}>
+                                    <Text style={styles.label}>Current Password</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Enter current password"
+                                        placeholderTextColor="#7c7a87"
+                                        secureTextEntry
+                                        value={currentPassword}
+                                        onChangeText={setCurrentPassword}
+                                        editable={!isSubmitting}
+                                    />
+                                </View>
+
+                                <View style={styles.fieldGroup}>
+                                    <Text style={styles.label}>New Password</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Enter new password"
+                                        placeholderTextColor="#7c7a87"
+                                        secureTextEntry
+                                        value={newPassword}
+                                        onChangeText={setNewPassword}
+                                        editable={!isSubmitting}
+                                    />
+                                </View>
+
+                                <View style={styles.fieldGroup}>
+                                    <Text style={styles.label}>Confirm New Password</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Re-enter new password"
+                                        placeholderTextColor="#7c7a87"
+                                        secureTextEntry
+                                        value={confirmPassword}
+                                        onChangeText={setConfirmPassword}
+                                        editable={!isSubmitting}
+                                    />
+                                </View>
+                            </ScrollView>
+
+                            <View style={styles.buttonRow}>
+                                <Pressable style={styles.secondaryButton} onPress={onClose} disabled={isSubmitting}>
+                                    <Text style={styles.secondaryButtonText}>Cancel</Text>
+                                </Pressable>
+                                <Pressable style={[styles.primaryButton, isSubmitting && styles.primaryButtonDisabled]} onPress={handleUpdate} disabled={isSubmitting}>
+                                    <Text style={styles.primaryButtonText}>{isSubmitting ? 'Updating...' : 'Update Password'}</Text>
+                                </Pressable>
                             </View>
-
-                            <View style={styles.fieldGroup}>
-                                <Text style={styles.label}>New Password</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Enter new password"
-                                    placeholderTextColor="#7c7a87"
-                                    secureTextEntry
-                                    value={newPassword}
-                                    onChangeText={setNewPassword}
-                                />
-                            </View>
-
-                            <View style={styles.fieldGroup}>
-                                <Text style={styles.label}>Confirm New Password</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Re-enter new password"
-                                    placeholderTextColor="#7c7a87"
-                                    secureTextEntry
-                                    value={confirmPassword}
-                                    onChangeText={setConfirmPassword}
-                                />
-                            </View>
-                        </ScrollView>
-
-                        <View style={styles.buttonRow}>
-                            <Pressable style={styles.primaryButton} onPress={handleUpdate}>
-                                <Text style={styles.primaryButtonText}>Update Password</Text>
-                            </Pressable>
-                            <Pressable style={styles.secondaryButton} onPress={onClose}>
-                                <Text style={styles.secondaryButtonText}>Cancel</Text>
-                            </Pressable>
                         </View>
                     </View>
                 </View>
-            </View>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }
 
 const styles = StyleSheet.create({
+    modalRoot: {
+        flex: 1,
+    },
     backdrop: {
         flex: 1,
         backgroundColor: "rgba(0,0,0,0.35)",
@@ -112,6 +154,11 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: "#666",
         marginTop: -2,
+    },
+    errorText: {
+        color: "#b91c1c",
+        fontSize: 13,
+        marginTop: 4,
     },
     form: {
         gap: 14,
@@ -149,6 +196,9 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         flex: 1,
+    },
+    primaryButtonDisabled: {
+        opacity: 0.7,
     },
     primaryButtonText: {
         color: "#fff",

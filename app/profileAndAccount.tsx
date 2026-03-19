@@ -1,26 +1,84 @@
-import React, { useState } from 'react';
+import { Feather } from '@expo/vector-icons';
+import AntDesign from '@expo/vector-icons/AntDesign';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
-import AntDesign from '@expo/vector-icons/AntDesign';
-import DeactivateModal from '../components/modals/deactivateModal';
 import ChangePasswordModal from '../components/modals/changePasswordModal';
+import DeactivateModal from '../components/modals/deactivateModal';
+import { useAuth } from '../context/AuthContext';
+import { useUser } from '../context/UserContext';
+
+const formatDate = (value?: string) => {
+    if (!value) {
+        return '-';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+    });
+};
+
+const toDisplayRole = (value?: string) => {
+    if (!value) {
+        return '-';
+    }
+
+    return value.charAt(0).toUpperCase() + value.slice(1);
+};
 
 export default function ProfileAndAccount() {
-    const username = "Juztine17"; // TODO: Get from user context or auth
-    const firstName = "Juztine"; // TODO: Get from user context or auth
-    const lastName = "Miguel"; // TODO: Get from user context or auth
-    const email = "juztine.miguel@example.com"; // TODO: Get from user context or auth
-    const role = "Caregiver"; // TODO: Get from user context or auth
-    const phone = "09123456789"; // TODO: Get from user context or auth
-    const joinDate = "January 18, 2026"; // TODO: Get from user context or auth
+    const { user, logout } = useAuth();
+    const {
+        profileData,
+        profileLoading,
+        profileError,
+        deletingAccount,
+        changePassword,
+        deleteCurrentUser,
+    } = useUser();
     const router = useRouter();
     const [showDeactivate, setShowDeactivate] = useState(false);
     const [showChangePassword, setShowChangePassword] = useState(false);
+
+    const fullName = useMemo(() => {
+        if (!profileData) {
+            return '-';
+        }
+
+        return [profileData.first_name, profileData.middle_name, profileData.last_name]
+            .filter(Boolean)
+            .join(' ');
+    }, [profileData]);
+
+    const handleChangePassword = async (payload: { currentPassword: string; newPassword: string; confirmPassword: string }) => {
+        const message = await changePassword({
+            currentPassword: payload.currentPassword,
+            newPassword: payload.newPassword,
+        });
+        Alert.alert('Success', message);
+    };
+
+    const handleDeleteAccount = async () => {
+        try {
+            const successMessage = await deleteCurrentUser();
+            await logout();
+            setShowDeactivate(false);
+            Alert.alert('Success', successMessage);
+            router.replace('/login');
+        } catch (err) {
+            Alert.alert('Delete Failed', (err as Error).message || 'Unable to delete account.');
+        }
+    };
   return (
     <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={profile.gradient}>
         <ScrollView>
@@ -37,15 +95,40 @@ export default function ProfileAndAccount() {
             </View>
 
             <View style={profile.accInfoContainer}>
-                <Text style={profile.accInfoTitle}>Personal Information</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 5 }}>
+                    <Text style={profile.accInfoTitle}>Personal Information</Text>
+                    <Pressable
+                        onPress={() => {
+                            router.push('/editProfile');
+                        }}
+                        style={({ pressed }) => [
+                            profile.editButton,
+                            { opacity: pressed ? 0.5 : 1 },
+                        ]}
+                    >
+                        <Ionicons name="pencil-outline" size={16} color="#000000" />
+                        <Text>Edit</Text>
+                    </Pressable>
+                </View>
                 <Text style={profile.accInfoSubTitle}>Your personal information and contact information</Text>
+
+                {profileLoading ? (
+                    <View style={profile.feedbackRow}>
+                        <ActivityIndicator size="small" color="#7C6FDC" />
+                        <Text style={profile.feedbackText}>Loading profile...</Text>
+                    </View>
+                ) : null}
+
+                {profileError ? (
+                    <Text style={profile.errorText}>{profileError}</Text>
+                ) : null}
 
                 {/* This is for the user information */}
                 <View style={{ paddingBottom: 15 }}>
                     <Text style={profile.accCredTitle}>Username:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="person-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{username}</Text>
+                        <Text style={profile.accCredInfo}>{profileData?.username || user?.username || '-'}</Text>
                     </View>
                 </View>
 
@@ -53,7 +136,7 @@ export default function ProfileAndAccount() {
                     <Text style={profile.accCredTitle}>First Name:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="person-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{firstName}</Text>
+                        <Text style={profile.accCredInfo}>{profileData?.first_name || '-'}</Text>
                     </View>
                 </View>
 
@@ -61,7 +144,15 @@ export default function ProfileAndAccount() {
                     <Text style={profile.accCredTitle}>Last Name:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="person-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{lastName}</Text>
+                        <Text style={profile.accCredInfo}>{profileData?.last_name || '-'}</Text>
+                    </View>
+                </View>
+
+                <View style={{ paddingBottom: 15 }}>
+                    <Text style={profile.accCredTitle}>Full Name:</Text>
+                    <View style={profile.inputContainer}>
+                        <Ionicons name="person-outline" size={16} color="#7C6FDC" />
+                        <Text style={profile.accCredInfo}>{fullName}</Text>
                     </View>
                 </View>
 
@@ -69,7 +160,7 @@ export default function ProfileAndAccount() {
                     <Text style={profile.accCredTitle}>Email:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="mail-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{email}</Text>
+                        <Text style={profile.accCredInfo}>{profileData?.email || '-'}</Text>
                     </View>
                 </View>
 
@@ -77,7 +168,7 @@ export default function ProfileAndAccount() {
                     <Text style={profile.accCredTitle}>Role:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="shield-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{role}</Text>
+                        <Text style={profile.accCredInfo}>{toDisplayRole(profileData?.role || user?.role)}</Text>
                     </View>
                 </View>
 
@@ -85,7 +176,7 @@ export default function ProfileAndAccount() {
                     <Text style={profile.accCredTitle}>Phone Number:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="call-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{phone}</Text>
+                        <Text style={profile.accCredInfo}>{profileData?.phone_number || '-'}</Text>
                     </View>
                 </View>
 
@@ -93,7 +184,7 @@ export default function ProfileAndAccount() {
                     <Text style={profile.accCredTitle}>Account Created:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="shield-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{joinDate}</Text>
+                        <Text style={profile.accCredInfo}>{formatDate(profileData?.created_at)}</Text>
                     </View>
                 </View>
             </View>
@@ -102,7 +193,7 @@ export default function ProfileAndAccount() {
             <View style={profile.accInfoContainer}>
                 <Text style={profile.accInfoTitle}>Security</Text>
                 <Text style={profile.accInfoSubTitle}>Manage your password and security settings</Text>
-                <Pressable style={profile.editButton} onPress={() => setShowChangePassword(true)}>
+                <Pressable style={profile.changePassButton} onPress={() => setShowChangePassword(true)}>
                         <Ionicons name="shield-outline" size={16} color="#111" />
                         <Text style={profile.editButtonText}>Change Password</Text>
                 </Pressable>
@@ -113,26 +204,25 @@ export default function ProfileAndAccount() {
                 <Text style={profile.accInfoSubTitle}>Irreversible account actions</Text>
                 <Pressable style={profile.dangerButton} onPress={() => setShowDeactivate(true)}>
                         <AntDesign name="exclamation-circle" size={16} color="white" />
-                        <Text style={profile.dangerButtonText}>Deactivate Account</Text>
+                        <Text style={profile.dangerButtonText}>Delete Account</Text>
                 </Pressable>
             </View>
 
             <DeactivateModal
                 visible={showDeactivate}
-                onConfirm={() => {
-                    setShowDeactivate(false);
-                    // TODO: Add deactivate logic
+                loading={deletingAccount}
+                onConfirm={handleDeleteAccount}
+                onCancel={() => {
+                    if (!deletingAccount) {
+                        setShowDeactivate(false);
+                    }
                 }}
-                onCancel={() => setShowDeactivate(false)}
             />
 
             <ChangePasswordModal
                 visible={showChangePassword}
                 onClose={() => setShowChangePassword(false)}
-                onSubmit={() => {
-                    setShowChangePassword(false);
-                    // TODO: Hook up password change logic
-                }}
+                onSubmit={handleChangePassword}
             />
             
         </SafeAreaView>
@@ -236,7 +326,25 @@ const profile = StyleSheet.create({
 
     },
 
-    editButton: {
+    feedbackRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 12,
+    },
+
+    feedbackText: {
+        color: '#4b4b4b',
+        fontSize: 14,
+    },
+
+    errorText: {
+        color: '#b91c1c',
+        marginBottom: 12,
+        fontSize: 13,
+    },
+
+    changePassButton: {
         backgroundColor: "#ffffff",
         borderWidth: 1,
         borderColor: "#bebebe",
@@ -247,7 +355,22 @@ const profile = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        width: "100%",
+        // width: "100%",
+        marginBottom: 5,
+    },
+
+    editButton: {
+        backgroundColor: "#ffffff",
+        borderWidth: 1,
+        borderColor: "#bebebe",
+        gap: 10,
+        borderRadius: 14,
+        paddingVertical: 6,
+        paddingHorizontal: 15,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        // width: "100%",
         marginBottom: 5,
     },
 

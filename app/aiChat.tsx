@@ -1,94 +1,120 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useState } from "react";
-import { Linking, Platform, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import Markdown from "react-native-markdown-display";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
+import Markdown from "react-native-markdown-display";
 import { SafeAreaView } from "react-native-safe-area-context";
-// import { demoMessages } from "../components/demo";
-
-type Message = {
-    sender: "user" | "ai";
-    content: string;
-};
-
-type HistoryEntry = {
-    role: "user" | "assistant";
-    parts: { text: string }[];
-};
+import { useChatbot } from "../context/ChatbotContext";
 
 export default function AIcareAssistant() {
+    const {
+        messages,
+        loadingHistory,
+        loadingMoreHistory,
+        sending,
+        chatError,
+        hasMoreHistory,
+        loadOlderHistory,
+        sendMessage,
+        clearChatError,
+    } = useChatbot();
+
+    const scrollViewRef = useRef<ScrollView>(null);
     const [userMessage, setUserMessage] = useState("");
-    const [messages, setMessages] = useState<Message[]>([
-        { sender: "ai", content: "Hello! How can I assist you today?" },
-    ]);
-    const [history, setHistory] = useState<HistoryEntry[]>([]);
 
-    const handleSendMessage = () => {
+    const handleSendMessage = async () => {
         const trimmed = userMessage.trim();
-        if (!trimmed) return;
-
-        const userMsg: Message = { sender: "user", content: trimmed };
-        setMessages((prev) => [...prev, userMsg]);
-
-        setHistory((prev) => [
-            ...prev,
-            {
-                role: "user",
-                parts: [{ text: trimmed }],
-            },
-        ]);
+        if (!trimmed || sending) return;
 
         setUserMessage("");
+        clearChatError();
+        await sendMessage(trimmed);
     };
+
+    useEffect(() => {
+        if (!loadingMoreHistory) {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+        }
+    }, [messages, loadingHistory, sending, loadingMoreHistory]);
 
     StatusBar.setBarStyle("dark-content");
 
     return (
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={{ flex: 1 }}>
             <SafeAreaView style={{ flex: 1 }}>
-                <View style={aiStyles.container}>
-                    <View style={aiStyles.headerContainer}>
-                        <View>
-                            <View style={aiStyles.headerRow}>
-                                <Ionicons name="sparkles-outline" size={25} color="#7C6FDC" style={aiStyles.headerIcon} />
-                                <Text style={aiStyles.headerTitle}>AI Assistant</Text>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+                    <View style={aiStyles.container}>
+                        <View style={aiStyles.headerContainer}>
+                            <View>
+                                <View style={aiStyles.headerRow}>
+                                    <Ionicons name="sparkles-outline" size={25} color="#7C6FDC" style={aiStyles.headerIcon} />
+                                    <Text style={aiStyles.headerTitle}>AI Assistant</Text>
+                                </View>
+                                <Text style={aiStyles.subHeader}>Ask me anything about your care schedule</Text>
                             </View>
-                            <Text style={aiStyles.subHeader}>Ask me anything about your care schedule</Text>
+                        </View>
+
+                        {/* This section is for the chatbox */}
+                        <ScrollView
+                            ref={scrollViewRef}
+                            style={aiStyles.chatContainer}
+                            contentContainerStyle={aiStyles.chatContent}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            {loadingHistory && (
+                                <View style={aiStyles.statusRow}>
+                                    <ActivityIndicator size="small" color="#7C6FDC" />
+                                    <Text style={aiStyles.statusText}>Loading chat history...</Text>
+                                </View>
+                            )}
+
+                            {chatError && (
+                                <Text style={aiStyles.errorText}>{chatError}</Text>
+                            )}
+
+                            {hasMoreHistory && !loadingHistory && (
+                                <TouchableOpacity
+                                    style={aiStyles.loadMoreButton}
+                                    onPress={loadOlderHistory}
+                                    disabled={loadingMoreHistory}
+                                >
+                                    {loadingMoreHistory ? (
+                                        <ActivityIndicator size="small" color="#7C6FDC" />
+                                    ) : (
+                                        <Text style={aiStyles.loadMoreButtonText}>Load older messages</Text>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+
+                            {messages.map((message, index) => (
+                                <View key={message.id || index} style={{ marginBottom: 15, alignItems: message.sender === "user" ? "flex-end" : "flex-start" }}>
+                                    <View style={[{ flex: 1, maxWidth: "80%", padding: 11, paddingVertical: 2, borderRadius: 20 }, message.sender === "user" ? { backgroundColor: "#dedafd" } : {backgroundColor: "#efedf0"}, ]}>
+                                        <Markdown style={aiMessages} onLinkPress={(url) => { Linking.openURL(url); return false; }}>
+                                            {message.content}
+                                        </Markdown>
+                                    </View>
+                                </View>
+                            ))}
+                        </ScrollView>
+                        {/* Input area for the user to type their message */}
+                        <View style={aiStyles.inputContainer}>
+                            <TextInput
+                                placeholder="Type your message..."
+                                placeholderTextColor="#555"
+                                style={aiStyles.input}
+                                value={userMessage}
+                                onChangeText={setUserMessage}
+                                editable={!sending}
+                                multiline
+                            />
+                            <TouchableOpacity style={[aiStyles.sendButton, sending && aiStyles.sendButtonDisabled]} onPress={handleSendMessage} disabled={sending}>
+                                {/* <Text style={aiStyles.sendButtonText}>Send</Text> */}
+                                {sending ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="send" size={16} color="#fff" />}
+                            </TouchableOpacity>
                         </View>
                     </View>
-
-                    {/* This section is for the chatbox */}
-                    <ScrollView
-                        style={aiStyles.chatContainer}
-                        contentContainerStyle={aiStyles.chatContent}
-                        keyboardShouldPersistTaps="handled"
-                    >
-                        {messages.map((message, index) => (
-                            <View key={index} style={{ marginBottom: 15, alignItems: message.sender === "user" ? "flex-end" : "flex-start" }}>
-                                <View style={[{ flex: 1, maxWidth: "80%", padding: 11, paddingVertical: 2, borderRadius: 20 }, message.sender === "user" ? { backgroundColor: "#dedafd" } : {backgroundColor: "#efedf0"}, ]}>
-                                    <Markdown style={aiMessages} onLinkPress={(url) => { Linking.openURL(url); return false; }}>
-                                        {message.content}
-                                    </Markdown>
-                                </View>
-                            </View>
-                        ))}
-                    </ScrollView>
-                    {/* Input area for the user to type their message */}
-                    <View style={aiStyles.inputContainer}>
-                        <TextInput
-                            placeholder="Type your message..."
-                            placeholderTextColor="#555"
-                            style={aiStyles.input}
-                            value={userMessage}
-                            onChangeText={setUserMessage}
-                        />
-                        <TouchableOpacity style={aiStyles.sendButton} onPress={handleSendMessage}>
-                            {/* <Text style={aiStyles.sendButtonText}>Send</Text> */}
-                            <Ionicons name="send" size={16} color="#fff" />
-                        </TouchableOpacity>
-                    </View>
-                </View>
+                </KeyboardAvoidingView>
             </SafeAreaView>
         </LinearGradient>
     );
@@ -187,9 +213,42 @@ const aiStyles = StyleSheet.create({
         padding: 12,
         borderRadius: 14,
     },
+    sendButtonDisabled: {
+        opacity: 0.7,
+    },
     sendButtonText: {
         color: "#fff",
         fontWeight: "bold",
+    },
+    statusRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 10,
+    },
+    statusText: {
+        color: "#5b5b5b",
+        fontSize: 13,
+    },
+    errorText: {
+        color: "#D14343",
+        fontSize: 13,
+        marginBottom: 10,
+    },
+    loadMoreButton: {
+        alignSelf: "center",
+        borderWidth: 1,
+        borderColor: "#d9cffc",
+        backgroundColor: "#f9f7ff",
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        marginBottom: 12,
+    },
+    loadMoreButtonText: {
+        color: "#5e4ccf",
+        fontSize: 13,
+        fontWeight: "600",
     },
 });
 

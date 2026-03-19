@@ -2,7 +2,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Checkbox, Menu, Switch, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomDatePickerModal from "../components/modals/CustomDatePickerModal";
@@ -178,9 +178,10 @@ export default function EditTaskScreen() {
 
     return (
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={styles.gradient}>
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                <SafeAreaView>
-                    <View style={styles.container}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                    <SafeAreaView>
+                        <View style={styles.container}>
                         <View style={styles.headerContainer}>
                             <Pressable onPress={() => router.back()}>
                                 <Feather name="arrow-left" size={24} color="black" />
@@ -469,9 +470,10 @@ export default function EditTaskScreen() {
                                 </View>
                             </View>
                         </View>
-                    </View>
-                </SafeAreaView>
-            </ScrollView>
+                        </View>
+                    </SafeAreaView>
+                </ScrollView>
+            </KeyboardAvoidingView>
 
             <CustomDatePickerModal
                 visible={showDatePicker}

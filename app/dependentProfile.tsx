@@ -1,132 +1,90 @@
-import Ionicons from "@expo/vector-icons/Ionicons";
-import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
-import { StatusBar, Text, View, StyleSheet } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import AddDependentsButton from "@/components/buttons/addDependents";
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import ChildTypeTag from "@/components/tags/type/child";
-import { Pressable } from "react-native";
-import SmallAddTaskButton from "@/components/buttons/smallAddTask";
-import ViewTaskButton from "@/components/buttons/viewTaskButton";
-import Octicons from "@expo/vector-icons/Octicons";
-import ElderlyTypeTag from "@/components/tags/type/elderly";
+import ChildDependentCard from "@/components/cards/childDependent";
+import ElderlyDependentCard from "@/components/cards/elderlyDependent";
+import GeneralDependentCard from "@/components/cards/generalDependent";
+import { NoDependentCard } from "@/components/cards/noDependent";
+import SpecialDependentCard from "@/components/cards/specialDependent";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React from "react";
+import { ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Dependent, useDependents } from "../context/DependentContext";
 
 export default function dependentProfile() {
+    const { dependents: dependentList } = useDependents();
+    const router = useRouter();
 
     StatusBar.setBarStyle("dark-content");
 
-    const birthday = "May 15, 2019";
-    const careNotes = "Allergic to peanuts.";
-    const notes = "Loves story time before bed.";
+    const getAge = (birthDate: string) => {
+        const match = birthDate.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+        if (!match) return 0;
+
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1;
+        const day = parseInt(match[3], 10);
+        const dob = new Date(year, month, day);
+
+        if (isNaN(dob.getTime())) return 0;
+
+        const today = new Date();
+        let age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        const beforeBirthday = monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate());
+
+        if (beforeBirthday) age -= 1;
+        return age < 0 ? 0 : age;
+    };
+
+    const renderDependentCard = (dependent: Dependent) => {
+        const commonProps = {
+            key: dependent.id,
+            name: dependent.name,
+            age: getAge(dependent.birthDate),
+            birthday: dependent.birthDate,
+            careNotes: dependent.careNotes || 'No care notes added.',
+            notes: dependent.notes || 'No additional notes added.',
+            onEdit: () => router.push({ pathname: '/editDependent', params: { dependentId: dependent.id } }),
+        };
+
+        switch (dependent.type) {
+            case 'Child':
+                return <ChildDependentCard {...commonProps} />;
+            case 'Elderly':
+                return <ElderlyDependentCard {...commonProps} />;
+            case 'Special Needs':
+                return <SpecialDependentCard {...commonProps} />;
+            case 'General':
+            default:
+                return <GeneralDependentCard {...commonProps} />;
+        }
+    };
 
     return (
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={{ flex: 1 }}>
             <SafeAreaView style={{ flex: 1 }}>
-                <View style={dependents.container}>
-                    <View style={dependents.headerContainer}>
-                        <View>
-                            <Text style={dependents.headerTitle}>Dependent Profile</Text>
-                            <Text style={dependents.subHeader}>Manage your dependent's{"\n"}information and preferences</Text>
+                <ScrollView contentContainerStyle={dependents.scrollContent} showsVerticalScrollIndicator={false}>
+                    <View style={dependents.container}>
+                        <View style={dependents.headerContainer}>
+                            <View>
+                                <Text style={dependents.headerTitle}>Dependent Profile</Text>
+                                <Text style={dependents.subHeader}>Manage your dependent's{"\n"}information and preferences</Text>
+                            </View>
+                            <AddDependentsButton />
                         </View>
-                        <AddDependentsButton />
+
+                        {dependentList.length === 0 ? (
+                            <View style={dependents.emptyStateContainer}>
+                                <NoDependentCard />
+                            </View>
+                        ) : (
+                            dependentList.map(renderDependentCard)
+                        )}
+
                     </View>
+                </ScrollView>
 
-                    {/* This section is for the dependent info  */}
-                    <View style={dependents.dependentContainer}>
-                        <View style={dependents.profileRow}>
-                            <View style={dependents.iconBg}>
-                                <MaterialCommunityIcons name="baby-face-outline" size={33} color="white" />
-                            </View>
-
-                            {/* Info Column */}
-                            <View style={dependents.infoColumn}>
-                                <View style={dependents.infoRow}>
-                                    <Text style={dependents.infoText}>Emma Johnson</Text>
-                                    <View style={dependents.actionsRow}>
-                                        <Pressable style={dependents.actionButton}>
-                                            <MaterialCommunityIcons name="pencil-outline" size={21} color="#000000" />
-                                        </Pressable>
-                                        <Pressable style={dependents.actionButton}>
-                                            <Ionicons name="trash" size={21} color="red" />
-                                        </Pressable>
-                                    </View>
-                                </View>
-                                <View style={dependents.metaRow}>
-                                    <ChildTypeTag />
-                                    <Text style={dependents.infoSubText}>Age: 6</Text>
-                                </View>                            
-                            </View>
-                        </View>
-                        {/* This is where the other info goes */}
-                        <View style={dependents.genInfo}>
-                            <Text style={dependents.geninfoSubText}>Date of Birth: {birthday}</Text>
-                            <View style={{flexDirection: "column"}}>
-                                <Text style={dependents.infoSubText}>Care Notes:</Text>
-                                <Text style={dependents.infoSubText}>• {careNotes}</Text>
-                            </View>
-                            <View style={{flexDirection: "column"}}>
-                                <Text style={dependents.infoSubText}>Notes:</Text>
-                                <Text style={dependents.infoSubText}>• {notes}</Text>
-                            </View>
-
-                             {/* This is where the button goes */}
-                             <View style={{flexDirection: "row", justifyContent: "flex-start", marginTop: 10, gap: 10}}>
-                                <ViewTaskButton />
-                                 <SmallAddTaskButton />
-                             </View>
-                        </View>
-                        
-                    </View>
-
-                    {/* This section is the 2nd dependent info  */}
-                    <View style={dependents.dependentContainer}>
-                        <View style={dependents.profileRow}>
-                            <View style={dependents.iconBg}>
-                                <Octicons name="person" size={33} color="white" />
-                            </View>
-
-                            {/* Info Column */}
-                            <View style={dependents.infoColumn}>
-                                <View style={dependents.infoRow}>
-                                    <Text style={dependents.infoText}>Robert Thompson</Text>
-                                    <View style={dependents.actionsRow}>
-                                        <Pressable style={dependents.actionButton}>
-                                            <MaterialCommunityIcons name="pencil-outline" size={21} color="#000000" />
-                                        </Pressable>
-                                        <Pressable style={dependents.actionButton}>
-                                            <Ionicons name="trash" size={21} color="red" />
-                                        </Pressable>
-                                    </View>
-                                </View>
-                                <View style={dependents.metaRow}>
-                                    <ElderlyTypeTag />
-                                    <Text style={dependents.infoSubText}>Age: 77</Text>
-                                </View>                            
-                            </View>
-                        </View>
-                        {/* This is where the other info goes */}
-                        <View style={dependents.genInfo}>
-                            <Text style={dependents.geninfoSubText}>Date of Birth: {birthday}</Text>
-                            <View style={{flexDirection: "column"}}>
-                                <Text style={dependents.infoSubText}>Care Notes:</Text>
-                                <Text style={dependents.infoSubText}>• {careNotes}</Text>
-                            </View>
-                            <View style={{flexDirection: "column"}}>
-                                <Text style={dependents.infoSubText}>Notes:</Text>
-                                <Text style={dependents.infoSubText}>• {notes}</Text>
-                            </View>
-
-                             {/* This is where the button goes */}
-                             <View style={{flexDirection: "row", justifyContent: "flex-start", marginTop: 10, gap: 10}}>
-                                <ViewTaskButton />
-                                 <SmallAddTaskButton />
-                             </View>
-                        </View>
-                        
-                    </View>
-
-                </View>
             </SafeAreaView>
         </LinearGradient>
     );
@@ -134,10 +92,18 @@ export default function dependentProfile() {
 
 const dependents = StyleSheet.create({
     container: {
-        flex: 1,
         padding: 10,
         // paddingTop: 0,
         // paddingBottom: 0,
+    },
+
+    scrollContent: {
+        paddingBottom: 20,
+    },
+
+    emptyStateContainer: {
+        marginHorizontal: 15,
+        marginTop: 10,
     },
 
     headerContainer: {

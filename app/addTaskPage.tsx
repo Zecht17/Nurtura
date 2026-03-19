@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Checkbox, Menu, Switch, TextInput } from 'react-native-paper';
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomDatePickerModal from '../components/modals/CustomDatePickerModal';
@@ -34,14 +34,20 @@ export default function AddTaskScreen() {
     // For Date and Time Pickers
     const [dueDate, setDueDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
-    const [dateInputValue, setDateInputValue] = useState(new Date().toLocaleDateString());
+    const formatDateYMD = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}/${month}/${day}`;
+    };
+    const [dateInputValue, setDateInputValue] = useState(formatDateYMD(new Date()));
     const [dueTime, setDueTime] = useState(new Date());
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [timeInputValue, setTimeInputValue] = useState(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }));
 
     const handleDateChange = (date: Date) => {
         setDueDate(date);
-        setDateInputValue(date.toLocaleDateString());
+        setDateInputValue(formatDateYMD(date));
     };
 
     const handleCloseDatePicker = () => {
@@ -68,21 +74,33 @@ export default function AddTaskScreen() {
     };
 
     const handleManualDateInput = (text: string) => {
-        setDateInputValue(text);
-        // Try to parse the input as a date (MM/DD/YYYY or MM-DD-YYYY)
-        const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/;
-        const match = text.match(dateRegex);
-        if (match) {
-            const [, monthStr, dayStr, yearStr] = match;
-            const month = parseInt(monthStr, 10);
-            const day = parseInt(dayStr, 10);
-            const year = parseInt(yearStr, 10);
+        const digits = text.replace(/\D/g, '').slice(0, 8); // YYYYMMDD max
+        let formatted = digits;
+        if (digits.length > 4) {
+            formatted = `${digits.slice(0, 4)}/${digits.slice(4)}`;
+        }
+        if (digits.length > 6) {
+            formatted = `${digits.slice(0, 4)}/${digits.slice(4, 6)}/${digits.slice(6)}`;
+        }
+        setDateInputValue(formatted);
 
-            // Construct a date only when all numeric parts are valid
-            if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
-                const parsedDate = new Date(year, month - 1, day);
-                setDueDate(parsedDate);
-            }
+        const match = formatted.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+        if (!match) {
+            return;
+        }
+
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10);
+        const day = parseInt(match[3], 10);
+        const parsedDate = new Date(year, month - 1, day);
+
+        if (
+            !isNaN(parsedDate.getTime()) &&
+            parsedDate.getFullYear() === year &&
+            parsedDate.getMonth() === month - 1 &&
+            parsedDate.getDate() === day
+        ) {
+            setDueDate(parsedDate);
         }
     };
 
@@ -130,7 +148,7 @@ export default function AddTaskScreen() {
             dependent: dependentType,
             description: description.trim(),
             status: "pending",
-            dueDate: dueDate.toLocaleDateString(),
+            dueDate: formatDateYMD(dueDate),
             dueTime: dueTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
             category,
             priority,
@@ -143,9 +161,10 @@ export default function AddTaskScreen() {
 
     return (
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={styles.gradient}>
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                <SafeAreaView>
-                    <View style={styles.container}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                    <SafeAreaView>
+                        <View style={styles.container}>
                         <View style={styles.headerContainer}>
                             <Pressable onPress={() => router.back()}>
                                 <Feather name="arrow-left" size={24} color="black" />
@@ -307,11 +326,11 @@ export default function AddTaskScreen() {
                                             {Platform.OS !== 'web' ? (
                                                 <Pressable onPress={() => setShowDatePicker(true)}>
                                                     <TextInput
-                                                        value={dueDate.toLocaleDateString()}
+                                                        value={dateInputValue}
                                                         mode="outlined"
                                                         editable={false}
                                                         pointerEvents="none"
-                                                        placeholder="MM/DD/YYYY"
+                                                        placeholder="YYYY/MM/DD"
                                                         right={<TextInput.Icon icon="calendar" />}
                                                         outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
                                                         style={styles.inputField}
@@ -323,7 +342,7 @@ export default function AddTaskScreen() {
                                                     onChangeText={handleManualDateInput}
                                                     mode="outlined"
                                                     editable={true}
-                                                    placeholder="MM/DD/YYYY"
+                                                    placeholder="YYYY/MM/DD"
                                                     right={<TextInput.Icon icon="calendar" />}
                                                     outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
                                                     style={styles.inputField}
@@ -457,9 +476,10 @@ export default function AddTaskScreen() {
                                 </View>
                             </View>
                         </View>
-                    </View>
-                </SafeAreaView>
-            </ScrollView>
+                        </View>
+                    </SafeAreaView>
+                </ScrollView>
+            </KeyboardAvoidingView>
 
             {/* Custom Date Picker Modal */}
             <CustomDatePickerModal

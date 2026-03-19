@@ -66,7 +66,7 @@ export default function LoginScreen() {
             colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]}
             style={styles.gradient}
         >
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.container}>
                 <View style={styles.authButtons}>
                     <Link href="/login" style={[styles.authLink, pathname === "/login" && styles.authLinkActive]}>Login</Link>
                     <Link href="/signup" style={[styles.authLink, pathname === "/signup" && styles.authLinkActive]}>Register</Link>

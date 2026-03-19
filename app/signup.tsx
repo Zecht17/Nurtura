@@ -1,9 +1,9 @@
-import { format } from "date-fns";
 import { LinearGradient } from "expo-linear-gradient";
 import { usePathname, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Button, Menu, Text, TextInput } from 'react-native-paper';
+import CustomDatePickerModal from "../components/modals/CustomDatePickerModal";
 import { useAuth } from "../context/AuthContext";
 
 export default function SignUpScreen() {
@@ -21,23 +21,66 @@ export default function SignUpScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [sex, setSex] = useState("Select Sex");
   const [sexMenuVisible, setSexMenuVisible] = useState(false);
-  const [birthdate, setBirthdate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [birthDate, setBirthDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dateError, setDateError] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
+  const isDatePickerSupported = Platform.OS !== "web";
 
-  const handleBirthdateChange = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 8); // YYYYMMDD max
+  const formatDateYMD = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}/${month}/${day}`;
+  };
+
+  const [dateInputValue, setDateInputValue] = useState(formatDateYMD(new Date()));
+
+  const handleDateChange = (date: Date) => {
+    setBirthDate(date);
+    setDateInputValue(formatDateYMD(date));
+    if (dateError) setDateError("");
+  };
+
+  const handleCloseDatePicker = () => {
+    setShowDatePicker(false);
+  };
+
+  const handleManualDateInput = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 8);
     let formatted = digits;
+
     if (digits.length > 4) {
-      formatted = `${digits.slice(0, 4)}-${digits.slice(4)}`;
+      formatted = `${digits.slice(0, 4)}/${digits.slice(4)}`;
     }
     if (digits.length > 6) {
-      formatted = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+      formatted = `${digits.slice(0, 4)}/${digits.slice(4, 6)}/${digits.slice(6)}`;
     }
-    setBirthdate(formatted);
+
+    setDateInputValue(formatted);
+
+    const match = formatted.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+    if (!match) {
+      return;
+    }
+
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const day = parseInt(match[3], 10);
+    const parsedDate = new Date(year, month - 1, day);
+
+    if (
+      !isNaN(parsedDate.getTime()) &&
+      parsedDate.getFullYear() === year &&
+      parsedDate.getMonth() === month - 1 &&
+      parsedDate.getDate() === day
+    ) {
+      setBirthDate(parsedDate);
+    }
   };
 
   const handleSignUp = async () => {
@@ -49,10 +92,13 @@ export default function SignUpScreen() {
       Alert.alert("Error", "Please select a role and sex");
       return;
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) {
-      Alert.alert("Error", "Birthday must be in YYYY-MM-DD format");
+    const dateMatch = dateInputValue.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+    if (!dateMatch) {
+      setDateError("Birthday must be in YYYY/MM/DD format");
       return;
     }
+
+    const apiBirthdate = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
 
     try {
       await register({
@@ -63,7 +109,7 @@ export default function SignUpScreen() {
         email,
         role,
         sex,
-        birthdate,
+        birthdate: apiBirthdate,
         phone_number: phoneNumber || undefined,
         password,
       });
@@ -77,7 +123,7 @@ export default function SignUpScreen() {
 
   return (
     <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={styles.gradient}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Top login/register toggle */}
           <View style={styles.authButtons}>
@@ -158,17 +204,29 @@ export default function SignUpScreen() {
               onChangeText={setEmail}
             />
 
-            <Text style={styles.inputTitle}>Birthday</Text>
-            <TextInput
-              placeholder="YYYY-MM-DD"
-              keyboardType="phone-pad"
-              mode="outlined"
-              activeOutlineColor="#6d28d9"
-              outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-              style={[styles.input, styles.inputField]}
-              value={birthdate}
-              onChangeText={handleBirthdateChange}
-            />
+            <Text style={styles.inputTitle}>Date of Birth *</Text>
+            <View style={styles.datePickerContainer}>
+              <TextInput
+                value={dateInputValue}
+                onChangeText={(text) => {
+                  handleManualDateInput(text);
+                  if (dateError) setDateError('');
+                }}
+                mode="outlined"
+                editable={true}
+                keyboardType="number-pad"
+                placeholder="YYYY/MM/DD"
+                right={<TextInput.Icon icon="calendar" onPress={() => {
+                  if (isDatePickerSupported) {
+                    setShowDatePicker(true);
+                  }
+                }} />}
+                activeOutlineColor="#6d28d9"
+                outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                style={[styles.input, styles.inputField]}
+              />
+            </View>
+            {!!dateError && <Text style={styles.errorText}>{dateError}</Text>}
 
             {/* Role & Sex Dropdowns */}
             <View style={styles.inputRow}>
@@ -282,6 +340,13 @@ export default function SignUpScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <CustomDatePickerModal
+        visible={isDatePickerSupported && showDatePicker}
+        date={birthDate}
+        onDateChange={handleDateChange}
+        onClose={handleCloseDatePicker}
+      />
     </LinearGradient>
   );
 }
@@ -375,6 +440,10 @@ const styles = StyleSheet.create({
         height: 45,  // to adjust the input smaller or bigger
     },
 
+    datePickerContainer: {
+      width: "100%",
+    },
+
     inputRow: {
         flexDirection: "row",
         columnGap: 12,
@@ -404,5 +473,12 @@ const styles = StyleSheet.create({
 
     dropdownItemText: {
         color: "#111827",
+    },
+
+    errorText: {
+      color: "#b91c1c",
+      marginTop: -8,
+      marginBottom: 10,
+      fontSize: 12,
     },
 });

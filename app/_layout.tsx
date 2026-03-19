@@ -1,21 +1,25 @@
 import { Stack, usePathname, useRootNavigationState, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { MD3LightTheme, PaperProvider } from "react-native-paper";
 import ReminderModal from "../components/modals/reminderModal";
 import { AuthProvider, useAuth } from "../context/AuthContext";
+import { ChatbotProvider } from "../context/ChatbotContext";
+import { DependentProvider } from "../context/DependentContext";
 import { TasksProvider, useTasks } from "../context/TasksContext";
+import { UserProvider } from "../context/UserContext";
 
 function RouteGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const segments = useSegments();
   const rootState = useRootNavigationState();
-  const { user, loading } = useAuth();
+  const { user, authChecking } = useAuth();
 
   useEffect(() => {
     if (!rootState?.key) return; // navigation not ready
-    if (loading) return;
+    if (authChecking) return;
 
     const currentSegment = segments[0];
     const onAuthScreens = pathname === "/login" || pathname === "/signup" || currentSegment === "login" || currentSegment === "signup";
@@ -28,9 +32,15 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
     if (user && onAuthScreens) {
       setTimeout(() => router.replace("/"), 0);
     }
-  }, [user, loading, pathname, router, rootState?.key, segments]);
+  }, [user, authChecking, pathname, router, rootState?.key, segments]);
 
-  if (loading || !rootState?.key) return null;
+  if (authChecking || !rootState?.key) {
+    return (
+      <View style={styles.guardLoadingContainer}>
+        <ActivityIndicator size="large" color="#7C6FDC" />
+      </View>
+    );
+  }
 
   return <>{children}</>;
 }
@@ -40,27 +50,36 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <TasksProvider>
-          <PaperProvider theme={MD3LightTheme}>
-            <ReminderMounts />
-            <RouteGuard>
-              <Stack>
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="login" options={{ headerShown: false }} />
-                <Stack.Screen name="signup" options={{ headerShown: false }} />
-                <Stack.Screen name="addTaskPage" options={{ headerShown: false }} />
-                <Stack.Screen name="editTaskPage" options={{ headerShown: false }} />
-                <Stack.Screen name="taskDetails" options={{ headerShown: false }} />
-                <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} />
-                <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} />
-                <Stack.Screen name="aiChat" options={{ headerShown: false }} />
-                <Stack.Screen name="dependentProfile" options={{ headerShown: false }} />
-                <Stack.Screen name="profileAndAccount" options={{ headerShown: false }} />
-                <Stack.Screen name="settings" options={{ headerShown: false }} />
-              </Stack>
-            </RouteGuard>
-          </PaperProvider>
-        </TasksProvider>
+        <UserProvider>
+          <ChatbotProvider>
+            <DependentProvider>
+              <TasksProvider>
+                <PaperProvider theme={MD3LightTheme}>
+                  <ReminderMounts />
+                  <RouteGuard>
+                    <Stack>
+                      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                      <Stack.Screen name="login" options={{ headerShown: false }} />
+                      <Stack.Screen name="signup" options={{ headerShown: false }} />
+                      <Stack.Screen name="addTaskPage" options={{ headerShown: false }} />
+                      <Stack.Screen name="editTaskPage" options={{ headerShown: false }} />
+                      <Stack.Screen name="taskDetails" options={{ headerShown: false }} />
+                      <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} />
+                      <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} />
+                      <Stack.Screen name="aiChat" options={{ headerShown: false }} />
+                      <Stack.Screen name="dependentProfile" options={{ headerShown: false }} />
+                      <Stack.Screen name="profileAndAccount" options={{ headerShown: false }} />
+                      <Stack.Screen name="editProfile" options={{ headerShown: false }} />
+                      <Stack.Screen name="settings" options={{ headerShown: false }} />
+                      <Stack.Screen name="addDependent" options={{ headerShown: false }} />
+                      <Stack.Screen name="editDependent" options={{ headerShown: false }} />
+                    </Stack>
+                  </RouteGuard>
+                </PaperProvider>
+              </TasksProvider>
+            </DependentProvider>
+          </ChatbotProvider>
+        </UserProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );
@@ -111,3 +130,12 @@ function ReminderMounts() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  guardLoadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E3F2FD",
+  },
+});

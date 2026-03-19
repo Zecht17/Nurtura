@@ -6,7 +6,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function EditCareSpaceSettings() {
@@ -22,7 +22,8 @@ export default function EditCareSpaceSettings() {
 	return (
 		<LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={{ flex: 1 }}>
 			<SafeAreaView style={{ flex: 1 }}>
-				<View style={styles.container}>
+				<KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+					<View style={styles.container}>
 					<View style={styles.headerContainer}>
 						<Pressable onPress={() => router.back()}>
 							<Feather name="arrow-left" size={24} color="black" />
@@ -141,7 +142,8 @@ export default function EditCareSpaceSettings() {
 						</View>
 					</View>
 
-				</View>
+					</View>
+				</KeyboardAvoidingView>
 			</SafeAreaView>
 		</LinearGradient>
 	);

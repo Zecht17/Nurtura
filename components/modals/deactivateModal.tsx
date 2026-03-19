@@ -2,25 +2,26 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 type DeactivateModalProps = {
     visible: boolean;
+    loading?: boolean;
     onConfirm: () => void;
     onCancel: () => void;
 };
 
-export default function DeactivateModal({ visible, onConfirm, onCancel }: DeactivateModalProps) {
+export default function DeactivateModal({ visible, loading = false, onConfirm, onCancel }: DeactivateModalProps) {
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={loading ? undefined : onCancel}>
             <View style={styles.backdrop}>
                 <View style={styles.card}>
                     <Text style={styles.title}>Are you absolutely sure?</Text>
                     <Text style={styles.subtitle}>
-                        This action will deactivate your account. You can reactivate it later by logging in again. All your data will be preserved.
+                        This action will permanently delete your account. This cannot be undone.
                     </Text>
 
-                    <Pressable style={styles.deactivateButton} onPress={onConfirm}>
-                        <Text style={styles.deactivateButtonText}>Deactivate Account</Text>
+                    <Pressable style={[styles.deactivateButton, loading && styles.buttonDisabled]} onPress={onConfirm} disabled={loading}>
+                        <Text style={styles.deactivateButtonText}>{loading ? 'Deleting...' : 'Delete Account'}</Text>
                     </Pressable>
 
-                    <Pressable style={styles.cancelButton} onPress={onCancel}>
+                    <Pressable style={styles.cancelButton} onPress={onCancel} disabled={loading}>
                         <Text style={styles.cancelButtonText}>Cancel</Text>
                     </Pressable>
                 </View>
@@ -71,6 +72,9 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         paddingVertical: 12,
         alignItems: "center",
+    },
+    buttonDisabled: {
+        opacity: 0.7,
     },
     deactivateButtonText: {
         color: "#ffffff",

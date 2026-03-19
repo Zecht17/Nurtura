@@ -2,12 +2,12 @@ import AntDesign from "@expo/vector-icons/AntDesign";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
 import {
-    Pressable,
-    StyleProp,
-    StyleSheet,
-    Text,
-    View,
-    ViewStyle,
+  Pressable,
+  StyleProp,
+  StyleSheet,
+  Text,
+  View,
+  ViewStyle,
 } from "react-native";
 
 type Props = {
@@ -17,7 +17,7 @@ type Props = {
 
 export default function AddDependentsButton({ onPress, style }: Props) {
   return (
-    <Link href="/dependentProfile" asChild>
+    <Link href="/addDependent" asChild>
       <Pressable
         onPress={onPress}
         style={({ pressed }) => [

@@ -36,10 +36,12 @@ export type RegisterPayload = {
 // Context value type
 type AuthContextValue = {
   user: User | null;
+  authChecking: boolean;
   loading: boolean;
   error: string | null;
   login: (payload: LoginPayload) => Promise<User>;
   register: (payload: RegisterPayload) => Promise<unknown>;
+  refreshAccessToken: () => Promise<string | null>;
   checkAuth: () => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -48,11 +50,13 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Load user from SecureStore on app start
   const checkAuth = async () => {
+    setAuthChecking(true);
     setLoading(true);
     try {
       const username = await SecureStore.getItemAsync("username");
@@ -70,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
     } finally {
       setLoading(false);
+      setAuthChecking(false);
     }
   };
 
@@ -159,6 +164,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Refresh access token using refresh token
+  const refreshAccessToken = async (): Promise<string | null> => {
+    try {
+      const refresh_token = await SecureStore.getItemAsync("refresh_token");
+      if (!refresh_token) {
+        return null;
+      }
+
+      // Try explicit refresh endpoint first.
+      let response = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ refresh_token }),
+      });
+
+      // Fallback to OAuth token endpoint with refresh grant.
+      if (!response.ok) {
+        const body =
+          `grant_type=refresh_token` +
+          `&refresh_token=${encodeURIComponent(refresh_token)}`;
+
+        response = await fetch(`${API_URL}/api/v1/auth/token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+          },
+          body,
+        });
+      }
+
+      const data = await response.json();
+      if (!response.ok || !data?.access_token) {
+        return null;
+      }
+
+      await SecureStore.setItemAsync("access_token", data.access_token);
+      const nextRefreshToken = data.refresh_token || refresh_token;
+      await SecureStore.setItemAsync("refresh_token", nextRefreshToken);
+
+      setUser((prev) => {
+        if (!prev) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          access_token: data.access_token,
+          refresh_token: nextRefreshToken,
+        };
+      });
+
+      return data.access_token;
+    } catch (err) {
+      console.log("REFRESH TOKEN ERROR:", err);
+      return null;
+    }
+  };
+
   // Logout function
     const logout = async () => {
     setLoading(true);
@@ -196,8 +263,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Memoize context value
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, error, login, register, checkAuth, logout }),
-    [user, loading, error, login, register, checkAuth, logout]
+    () => ({ user, authChecking, loading, error, login, register, refreshAccessToken, checkAuth, logout }),
+    [user, authChecking, loading, error, login, register, refreshAccessToken, checkAuth, logout]
   );
 
   // Rehydrate user on app start
