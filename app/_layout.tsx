@@ -1,49 +1,67 @@
-import { Stack } from "expo-router";
+import { Stack, usePathname, useRootNavigationState, useRouter, useSegments } from "expo-router";
+import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { MD3LightTheme, PaperProvider } from "react-native-paper";
 import ReminderModal from "../components/modals/reminderModal";
+import { AuthProvider, useAuth } from "../context/AuthContext";
 import { TasksProvider, useTasks } from "../context/TasksContext";
 
-// function RouteGuard ({ children }: { children: React.ReactNode }) {
+function RouteGuard({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const segments = useSegments();
+  const rootState = useRootNavigationState();
+  const { user, loading } = useAuth();
 
-//   const router = useRouter();
-//   const isAuth = false;
+  useEffect(() => {
+    if (!rootState?.key) return; // navigation not ready
+    if (loading) return;
 
-//   useEffect(() => {
-//     if (!isAuth) {
-//       router.replace("/signup");
-//     }
-//   });
+    const currentSegment = segments[0];
+    const onAuthScreens = pathname === "/login" || pathname === "/signup" || currentSegment === "login" || currentSegment === "signup";
 
-//   return <>{children}</>
-  
-// }
+    if (!user && !onAuthScreens) {
+      // defer to next tick to avoid pre-mount navigation warning
+      setTimeout(() => router.replace("/login"), 0);
+    }
+
+    if (user && onAuthScreens) {
+      setTimeout(() => router.replace("/"), 0);
+    }
+  }, [user, loading, pathname, router, rootState?.key, segments]);
+
+  if (loading || !rootState?.key) return null;
+
+  return <>{children}</>;
+}
 
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <TasksProvider>
-        <PaperProvider theme={MD3LightTheme}>
-          <ReminderMounts />
-          {/* <RouteGuard> */}
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="login" options={{ headerShown: false }} />
-              <Stack.Screen name="signup" options={{ headerShown: false }} />
-              <Stack.Screen name="addTaskPage" options={{ headerShown: false }} />
-              <Stack.Screen name="editTaskPage" options={{ headerShown: false }} />
-              <Stack.Screen name="taskDetails" options={{ headerShown: false }} />
-              <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} />
-              <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} />
-              <Stack.Screen name="aiChat" options={{ headerShown: false }} />
-              <Stack.Screen name="dependentProfile" options={{ headerShown: false }} />
-              <Stack.Screen name="profileAndAccount" options={{ headerShown: false }} />
-              <Stack.Screen name="settings" options={{ headerShown: false }} />
-            </Stack>
-          {/* </RouteGuard> */}
-        </PaperProvider>
-      </TasksProvider>
+      <AuthProvider>
+        <TasksProvider>
+          <PaperProvider theme={MD3LightTheme}>
+            <ReminderMounts />
+            <RouteGuard>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="login" options={{ headerShown: false }} />
+                <Stack.Screen name="signup" options={{ headerShown: false }} />
+                <Stack.Screen name="addTaskPage" options={{ headerShown: false }} />
+                <Stack.Screen name="editTaskPage" options={{ headerShown: false }} />
+                <Stack.Screen name="taskDetails" options={{ headerShown: false }} />
+                <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} />
+                <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} />
+                <Stack.Screen name="aiChat" options={{ headerShown: false }} />
+                <Stack.Screen name="dependentProfile" options={{ headerShown: false }} />
+                <Stack.Screen name="profileAndAccount" options={{ headerShown: false }} />
+                <Stack.Screen name="settings" options={{ headerShown: false }} />
+              </Stack>
+            </RouteGuard>
+          </PaperProvider>
+        </TasksProvider>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }

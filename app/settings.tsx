@@ -1,12 +1,13 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
-import React from "react";
-import { LinearGradient } from "expo-linear-gradient";
-import { SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
-import { useRouter } from "expo-router";
-import Ionicons from '@expo/vector-icons/Ionicons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../context/AuthContext";
 
 export default function SettingsPage() {
 	const router = useRouter();
@@ -14,6 +15,18 @@ export default function SettingsPage() {
     const lastName = "Miguel"; // TODO: Get from user context or auth
     const email = "juztine.miguel@example.com"; // TODO: Get from user context or auth
     const joinDate = "January 18, 2026"; // TODO: Get from user context or auth
+
+    const { logout } = useAuth();
+
+    const handleLogout = async () => {
+        try {
+            await logout();  // now this will work
+            router.push("/login");
+        } catch (err) {
+            console.log("Logout failed:", err);
+        }
+    };
+
   return (
     <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={settings.gradient}>
         <SafeAreaView style={settings.container}>
@@ -66,7 +79,7 @@ export default function SettingsPage() {
             </View>
             
             {/* Logout button */}
-            <Pressable style={settings.logoutButton} onPress={() => router.push("/login")}>
+            <Pressable style={settings.logoutButton} onPress={handleLogout}>
                 <MaterialIcons name="logout" size={18} color="white" />
                 <Text style={settings.logoutButtonText}>Logout</Text>
             </Pressable>

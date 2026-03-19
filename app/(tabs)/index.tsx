@@ -4,6 +4,7 @@ import MonthlyRecurringStatus from "@/components/tags/recurring/monthly";
 import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
+import { useAuth } from "@/context/AuthContext";
 import { useTasks } from "@/context/TasksContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -24,7 +25,7 @@ import DailyRecurringStatus from "../../components/tags/recurring/daily";
 import PendingStatus from "../../components/tags/status/pending";
 
 export default function Index() {
-  const userName = "Juztine Miguel"; // TODO: Get from user context or auth
+  const { user } = useAuth(); // TODO: Get from user context or auth
 
   const [range, setRange] = useState("Today");
   const [menuVisible, setMenuVisible] = useState(false);
@@ -177,7 +178,7 @@ export default function Index() {
 
           {/* This is the Greeting Header */}
           <View style={styles.headerContainer}>
-            <Text style={styles.headerTitle}>Welcome Back, {userName}!</Text>
+            <Text style={styles.headerTitle}>Welcome Back, {user?.username ?? "User"}!</Text>
             <Text style={styles.subHeader}>Here's your caregiving overview for today.</Text>
           </View>
 
