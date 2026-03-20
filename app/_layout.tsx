@@ -1,6 +1,7 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { Stack, usePathname, useRootNavigationState, useRouter, useSegments } from "expo-router";
-import { useEffect } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Animated, Easing, Image, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { MD3LightTheme, PaperProvider } from "react-native-paper";
 import ReminderModal from "../components/modals/reminderModal";
@@ -47,6 +48,20 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
 
 
 export default function RootLayout() {
+  const [showIntroSplash, setShowIntroSplash] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowIntroSplash(false);
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (showIntroSplash) {
+    return <BrandSplashScreen />;
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
@@ -83,6 +98,56 @@ export default function RootLayout() {
         </UserProvider>
       </AuthProvider>
     </GestureHandlerRootView>
+  );
+}
+
+function BrandSplashScreen() {
+  const logoScale = useRef(new Animated.Value(0.35)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const brandingOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(logoScale, {
+          toValue: 1.1,
+          duration: 320,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(logoScale, {
+          toValue: 1,
+          friction: 6,
+          tension: 100,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 450,
+        useNativeDriver: true,
+      }),
+      Animated.timing(brandingOpacity, {
+        toValue: 1,
+        duration: 500,
+        delay: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [brandingOpacity, logoOpacity, logoScale]);
+
+  return (
+    <LinearGradient colors={["#E8E4F8", "#F3E5F8", "#E3F2FD"]} style={styles.splashGradient}>
+      <View style={styles.splashContent}>
+        <Animated.View style={{ opacity: logoOpacity, transform: [{ scale: logoScale }] }}>
+          <Image source={require("../assets/images/nurtura_splash.png")} style={styles.splashLogo} resizeMode="contain" />
+        </Animated.View>
+        <Animated.View style={[styles.splashBranding, { opacity: brandingOpacity }]}>
+          <Text style={styles.splashTitle}>Nurtura</Text>
+          <Text style={styles.splashTagline}>Care that feels like home</Text>
+        </Animated.View>
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -133,6 +198,42 @@ function ReminderMounts() {
 }
 
 const styles = StyleSheet.create({
+  splashGradient: {
+    flex: 1,
+  },
+  splashContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  splashBranding: {
+    position: "absolute",
+    bottom: 68,
+    left: 24,
+    right: 24,
+    alignItems: "center",
+  },
+  splashLogo: {
+    width: 220,
+    height: 220,
+  },
+  splashTitle: {
+    fontSize: 30,
+    fontWeight: "800",
+    color: "#2C3350",
+    textAlign: "center",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  splashTagline: {
+    marginTop: 8,
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#4C566A",
+    textAlign: "center",
+    letterSpacing: 0.2,
+  },
   guardLoadingContainer: {
     flex: 1,
     alignItems: "center",

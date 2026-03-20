@@ -2,9 +2,10 @@
   "expo": {
     "name": "Nurtura",
     "slug": "Nurtura",
+    "description": "Care that feels like home",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/nurtura_icon.png",
     "scheme": "nurtura",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -30,12 +31,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/nurtura_splash.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#7C6FDC",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#7C6FDC"
           }
         }
       ],
