@@ -28,6 +28,35 @@ export default function CalendarScreen() {
     const [nowMs, setNowMs] = useState(Date.now());
     StatusBar.setBarStyle("dark-content");
 
+    const toCalendarDateKey = (dateInput?: string) => {
+        if (!dateInput) return null;
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+            return dateInput;
+        }
+
+        if (/^\d{4}\/\d{2}\/\d{2}$/.test(dateInput)) {
+            const [year, month, day] = dateInput.split("/");
+            return `${year}-${month}-${day}`;
+        }
+
+        const parsed = new Date(dateInput);
+        if (!isNaN(parsed.getTime())) {
+            return parsed.toISOString().slice(0, 10);
+        }
+
+        const parts = dateInput.split(/[\/]/).map((p) => parseInt(p, 10));
+        if (parts.length === 3) {
+            const [month, day, year] = parts;
+            if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
+                const manual = new Date(year, month - 1, day);
+                if (!isNaN(manual.getTime())) return manual.toISOString().slice(0, 10);
+            }
+        }
+
+        return null;
+    };
+
     useEffect(() => {
         const id = setInterval(() => setNowMs(Date.now()), 1000);
         return () => clearInterval(id);
@@ -177,15 +206,9 @@ export default function CalendarScreen() {
     }, [tasks, nowMs]);
 
     // This is so it filter tasks based on selected date
-    const selectedLocaleDate = useMemo(() => {
-        const d = new Date(selectedDate);
-        return isNaN(d.getTime()) ? null : d.toLocaleDateString();
-    }, [selectedDate]);
-
     const filteredTasks = useMemo(() => {
-        if (!selectedLocaleDate) return [];
-        return decoratedTasks.filter((task) => task.dueDate === selectedLocaleDate);
-    }, [decoratedTasks, selectedLocaleDate]);
+        return decoratedTasks.filter((task) => toCalendarDateKey(task.dueDate) === selectedDate);
+    }, [decoratedTasks, selectedDate]);
 
     // Build markedDates with dots for dates that have tasks
     const markedDates = useMemo(() => {
@@ -193,10 +216,8 @@ export default function CalendarScreen() {
 
         tasks.forEach((task) => {
             if (!task.dueDate) return;
-            // Expect task.dueDate to be locale string; convert to ISO-like yyyy-mm-dd for the calendar key
-            const parsed = new Date(task.dueDate);
-            if (isNaN(parsed.getTime())) return;
-            const key = parsed.toISOString().slice(0, 10);
+            const key = toCalendarDateKey(task.dueDate);
+            if (!key) return;
             if (!dotsByDate[key]) dotsByDate[key] = { dots: [], marked: true };
             dotsByDate[key].dots?.push({ key: task.id, color: "#7C6FDC" });
         });

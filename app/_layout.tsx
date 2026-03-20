@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Stack, usePathname, useRootNavigationState, useRouter, useSegments } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Easing, Image, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Easing, Image, StatusBar, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { MD3LightTheme, PaperProvider } from "react-native-paper";
 import ReminderModal from "../components/modals/reminderModal";
@@ -105,6 +105,8 @@ function BrandSplashScreen() {
   const logoScale = useRef(new Animated.Value(0.35)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const brandingOpacity = useRef(new Animated.Value(0)).current;
+
+  StatusBar.setBarStyle("dark-content");
 
   useEffect(() => {
     Animated.parallel([

@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { usePathname, useRouter } from "expo-router";
+import { Link, usePathname, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Button, Menu, Text, TextInput } from 'react-native-paper';
 import CustomDatePickerModal from "../components/modals/CustomDatePickerModal";
 import { useAuth } from "../context/AuthContext";
@@ -125,10 +125,17 @@ export default function SignUpScreen() {
     <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={styles.gradient}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require("../assets/images/nurtura_splash.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
           {/* Top login/register toggle */}
           <View style={styles.authButtons}>
-            <Text style={[styles.authLink, pathname === "/login" && styles.authLinkActive]}>Login</Text>
-            <Text style={[styles.authLink, pathname === "/signup" && styles.authLinkActive]}>Register</Text>
+            <Link href="/login" style={[styles.authLink, pathname === "/login" && styles.authLinkActive]}>Login</Link>
+            <Link href="/signup" style={[styles.authLink, pathname === "/signup" && styles.authLinkActive]}>Register</Link>
           </View>
 
           <View style={styles.content}>
@@ -352,6 +359,16 @@ export default function SignUpScreen() {
 }
 
 const styles = StyleSheet.create({
+
+    logoContainer: {
+      alignItems: "center",
+      marginBottom: 14,
+    },
+
+    logo: {
+      width: 120,
+      height: 120,
+    },
 
     // This is for the Login/Registration buttons
     authButtons: {

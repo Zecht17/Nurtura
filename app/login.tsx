@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, usePathname, useRouter } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, StatusBar, StyleSheet, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, StatusBar, StyleSheet, View } from "react-native";
 import { Button, Text, TextInput } from "react-native-paper";
 import { useAuth } from "../context/AuthContext";
 
@@ -66,7 +66,15 @@ export default function LoginScreen() {
             colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]}
             style={styles.gradient}
         >
+            
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.container}>
+                <View style={styles.logoContainer}>
+                    <Image
+                        source={require("../assets/images/nurtura_splash.png")}
+                        style={styles.logo}
+                        resizeMode="contain"
+                    />
+                </View>
                 <View style={styles.authButtons}>
                     <Link href="/login" style={[styles.authLink, pathname === "/login" && styles.authLinkActive]}>Login</Link>
                     <Link href="/signup" style={[styles.authLink, pathname === "/signup" && styles.authLinkActive]}>Register</Link>
@@ -153,6 +161,16 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+
+    logoContainer: {
+        alignItems: "center",
+        marginBottom: 14,
+    },
+
+    logo: {
+        width: 120,
+        height: 120,
+    },
 
     // This is for the Login/Registration buttons
     authButtons: {

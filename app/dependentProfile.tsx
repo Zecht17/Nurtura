@@ -13,7 +13,6 @@ export default function dependentProfile() {
     const { dependents: dependentList, loadingDependents, dependentsError, fetchMyDependents, deleteDependentProfile } = useDependents();
     const router = useRouter();
     const pathname = usePathname();
-    const typeLabelSet = new Set(['General', 'Child', 'Elderly', 'Special Needs']);
     const [deleteTarget, setDeleteTarget] = React.useState<Dependent | null>(null);
     const [deleteLoading, setDeleteLoading] = React.useState(false);
 
@@ -82,9 +81,7 @@ export default function dependentProfile() {
     };
 
     const renderDependentCard = (dependent: Dependent) => {
-        const safeUsername = dependent.username && !typeLabelSet.has(dependent.username)
-            ? dependent.username
-            : '-';
+        const safeUsername = dependent.username || '-';
 
         return (
             <DependentCard
