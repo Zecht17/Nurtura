@@ -16,9 +16,10 @@ import {
 type Props = {
     createStyle?: StyleProp<ViewStyle>;
     joinStyle?: StyleProp<ViewStyle>;
+    onCreateCareSpace?: (payload: { name: string; description: string; type: string; selectedDependent: string | null }) => void;
 };
 
-export default function CareButtons({ createStyle, joinStyle }: Props) {
+export default function CareButtons({ createStyle, joinStyle, onCreateCareSpace }: Props) {
     const [isCreateVisible, setIsCreateVisible] = useState(false);
     const [isJoinVisible, setIsJoinVisible] = useState(false);
 
@@ -75,7 +76,10 @@ export default function CareButtons({ createStyle, joinStyle }: Props) {
             <CreateCarespaceModal
                 visible={isCreateVisible}
                 onClose={() => setIsCreateVisible(false)}
-                onCreate={() => setIsCreateVisible(false)}
+                onCreate={(payload) => {
+                    onCreateCareSpace?.(payload);
+                    setIsCreateVisible(false);
+                }}
             />
         </View>
     );

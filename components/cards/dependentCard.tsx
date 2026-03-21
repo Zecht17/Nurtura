@@ -25,6 +25,16 @@ export default function DependentCard({
 	onEdit,
 	onDelete,
 }: DependentCardProps) {
+	const careNoteLines = React.useMemo(() => {
+		const normalizedLines = careNotes
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter(Boolean)
+			.map((line) => line.replace(/^[\u2022\-\*]\s*/, ''));
+
+		return normalizedLines.length > 0 ? normalizedLines : ['No care notes added.'];
+	}, [careNotes]);
+
 	const handleCardPress = () => {
 		onOpenProfile?.();
 	};
@@ -74,7 +84,9 @@ export default function DependentCard({
 			<View style={styles.genInfo}>
 				<Text style={styles.geninfoSubText}>Care Notes:</Text>
 				<View style={styles.infoGroup}>
-					<Text style={styles.infoSubText}>• {careNotes}</Text>
+					{careNoteLines.map((line, index) => (
+						<Text key={`care-note-${index}`} style={styles.infoSubText}>• {line}</Text>
+					))}
 				</View>
 
 				<View style={styles.buttonRow}>

@@ -1,20 +1,23 @@
+import DependentOption from "@/components/cards/dependentOption";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { Menu, TextInput } from "react-native-paper";
+import { TextInput } from "react-native-paper";
 
 interface CreateCarespaceModalProps {
     visible: boolean;
     onClose: () => void;
-    onCreate?: (payload: { name: string; description: string; type: string }) => void;
+    onCreate?: (payload: { name: string; description: string; type: string; selectedDependent: string | null }) => void;
 }
 
 export default function CreateCarespaceModal({ visible, onClose, onCreate }: CreateCarespaceModalProps) {
     const [name, setName] = React.useState("");
     const [description, setDescription] = React.useState("");
     const [type, setType] = useState("Select Type");
+    const [selectedDependent, setSelectedDependent] = useState<string | null>(null);
     const [typeMenuVisible, setTypeMenuVisible] = useState(false);
+    const dependents = ["Emma Johnson", "Robert Thompson"];
 
     React.useEffect(() => {
         if (visible) {
@@ -22,12 +25,18 @@ export default function CreateCarespaceModal({ visible, onClose, onCreate }: Cre
             setName("");
             setDescription("");
             setType("Select Type");
+            setSelectedDependent(null);
         }
     }, [visible]);
 
     const handleCreate = () => {
         if (onCreate) {
-            onCreate({ name: name.trim(), description: description.trim(), type });
+            onCreate({
+                name: name.trim(),
+                description: description.trim(),
+                type,
+                selectedDependent,
+            });
         }
     };
 
@@ -64,32 +73,29 @@ export default function CreateCarespaceModal({ visible, onClose, onCreate }: Cre
                         style={[styles.input, styles.inputField, styles.textArea]}
                         activeOutlineColor="#7C6FDC"
                     />
-
-                    <Text style={styles.inputTitle}>Type</Text>
-                    <Menu
-                        visible={typeMenuVisible}
-                        onDismiss={() => setTypeMenuVisible(false)}
-                        anchor={
-                            <Pressable onPress={() => setTypeMenuVisible(true)}>
-                                <TextInput
-                                    value={type}
-                                    mode="outlined"
-                                    editable={false}
-                                    pointerEvents="none"
-                                    right={<TextInput.Icon icon="menu-down" />}
-                                    outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                    style={[styles.input, styles.inputField]}
-                                />
+                    
+                    <View style={styles.addDependentCollumn}>
+                        <Text style={styles.dependentTitle}>Add Dependent</Text>
+                        <Text style={styles.inputTitle}>Select a dependent to add to this care space</Text>
+                    </View>
+                    
+                    {/* This is where the dependent selection will go */}
+                    <View style={styles.depOptionsContainer}>
+                        {dependents.map((dependentName) => (
+                            <Pressable
+                                key={dependentName}
+                                onPress={() => setSelectedDependent(dependentName)}
+                                style={({ pressed }) => [
+                                    styles.optionWrapper,
+                                    selectedDependent === dependentName ? styles.selectedOption : null,
+                                    pressed ? styles.pressedOption : null,
+                                ]}
+                            >
+                                <DependentOption name={dependentName} />
                             </Pressable>
-                        }
-                        contentStyle={styles.dropdownContent}
-                        style={styles.dropdown}
-                    >
-                        <Menu.Item onPress={() => { setType("General"); setTypeMenuVisible(false); }} title="General" titleStyle={styles.dropdownItemText} />
-                        <Menu.Item onPress={() => { setType("Kids"); setTypeMenuVisible(false); }} title="Kids" titleStyle={styles.dropdownItemText} />
-                        <Menu.Item onPress={() => { setType("Elderly"); setTypeMenuVisible(false); }} title="Elderly" titleStyle={styles.dropdownItemText} />
-                        <Menu.Item onPress={() => { setType("Special Needs"); setTypeMenuVisible(false); }} title="Special Needs" titleStyle={styles.dropdownItemText} />
-                    </Menu>
+                        ))}
+                    </View>
+                    
 
                     <Pressable onPress={handleCreate} style={styles.ctaWrapper}>
                         <LinearGradient
@@ -179,10 +185,6 @@ const styles = StyleSheet.create({
     //     alignItems: "center",
     //     justifyContent: "space-between",
     // },
-    inputText: {
-        fontSize: 16,
-        color: "#333",
-    },
     placeholderText: {
         color: "#999",
     },
@@ -203,6 +205,13 @@ const styles = StyleSheet.create({
     inputTitle: {
         fontSize: 16,
         color: "#2b2b2b",
+        marginBottom: 6,
+    },
+
+    dependentTitle: {
+        fontSize: 18,
+        color: "black",
+        fontWeight: "bold",
         marginBottom: 6,
     },
 
@@ -250,4 +259,33 @@ const styles = StyleSheet.create({
     dropdownItemText: {
         color: "#111827",
     },
+
+    addDependentCollumn: {
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        // marginTop: 12,
+        marginBottom: 12,
+        padding: 12,
+    },
+
+    depOptionsContainer: {
+        flexDirection: "column",
+        gap: 12,
+    },
+
+    optionWrapper: {
+        borderRadius: 12,
+    },
+
+    selectedOption: {
+        borderWidth: 2,
+        borderColor: "#7C6FDC",
+        backgroundColor: "#F3EEFF",
+    },
+
+    pressedOption: {
+        opacity: 0.9,
+    },
+
 });

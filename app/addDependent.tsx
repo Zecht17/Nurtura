@@ -19,7 +19,7 @@ export default function AddDependentScreen() {
     const [lastName, setLastName] = useState('');
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
-    const role = 'dependent';
+    const role: 'dependent' = 'dependent';
     const [sex, setSex] = useState('Select Sex');
     const [sexMenuVisible, setSexMenuVisible] = useState(false);
 

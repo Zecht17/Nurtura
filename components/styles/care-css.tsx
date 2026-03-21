@@ -64,6 +64,7 @@ export const styles = StyleSheet.create({
         backgroundColor: "#fff",
         borderRadius: 14,
         margin: 18,
+        marginBottom: 0,
         padding: 20,
     },
 
@@ -78,6 +79,8 @@ export const styles = StyleSheet.create({
         color: "#666",
     },
 
+    
+
     caregiverRow: {
         flexDirection: "row",
         // gap: 10,
@@ -86,12 +89,21 @@ export const styles = StyleSheet.create({
         alignItems: "center",
     },
 
+    familySubTitle: {
+        fontSize: 18,
+        // fontWeight: "bold",
+        color: "#666",
+        alignSelf: "flex-start",
+        paddingTop: 5,
+    },
+
     careSubTitle: {
         fontSize: 18,
         // fontWeight: "bold",
         color: "#666",
         alignSelf: "flex-start",
         paddingTop: 5,
+        paddingBottom: 10,
     },
 
     addCaregiverButton: {
@@ -113,19 +125,25 @@ export const styles = StyleSheet.create({
 
     // caregiver styling
     caregiverList: {
-        marginTop: 10,
         gap: 10,
         borderBottomWidth: 1,
         borderBottomColor: "#b3b3b3be",
         paddingBottom: 15,
     },
 
+    familyList: {
+        marginTop: 10,
+        gap: 10,
+        borderBottomColor: "#b3b3b3be",
+    },
+
     caregiverItem: {
         backgroundColor: "#7C6FDC",
         width: 40,
         height: 40,
-        padding: 10,
         borderRadius: 100,
+        justifyContent: "center",
+        alignItems: "center",
     },
 
     careGiverIcon: {
@@ -159,8 +177,9 @@ export const styles = StyleSheet.create({
         backgroundColor: "#7C6FDC",
         width: 40,
         height: 40,
-        padding: 10,
         borderRadius: 100,
+        justifyContent: "center",
+        alignItems: "center",
     },
 
     memberIcon: {

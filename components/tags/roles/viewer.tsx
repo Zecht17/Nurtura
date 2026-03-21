@@ -1,14 +1,14 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { StyleSheet, Text, View } from "react-native";
 
-export type OwnerBadgeProps = {
+export type ViewerBadgeProps = {
     label?: string;
 };
 
-export default function PrimaryBadge({ label = "primary" }: OwnerBadgeProps) {
+export default function ViewerBadge({ label = "viewer" }: ViewerBadgeProps) {
     return (
         <View style={styles.ownerBadge}>
-            <Ionicons name="shield-outline" size={14} color="#7C6FDC" />
+            <Ionicons name="eye-outline" size={14} color="#7C6FDC" />
             <Text style={styles.ownerText}>{label}</Text>
         </View>
     );

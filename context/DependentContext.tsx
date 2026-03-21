@@ -1,8 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { API_URL, useAuth } from './AuthContext';
 
-export type DependentType = 'General' | 'Child' | 'Elderly' | 'Special Needs';
-
 export type Dependent = {
 	id: string;
 	dependentId?: number;
@@ -14,7 +12,6 @@ export type Dependent = {
 	email?: string;
 	sex?: string;
 	phoneNumber?: string;
-	type: DependentType;
 	birthDate: string; // YYYY/MM/DD
 	careNotes: string;
 	notes: string;
@@ -30,7 +27,7 @@ export type CreateDependentProfilePayload = {
 	last_name: string;
 	username: string;
 	email: string;
-	role: string;
+	role: 'dependent';
 	sex: string;
 	birthdate: string; // YYYY-MM-DD
 	phone_number?: string;
@@ -142,7 +139,6 @@ export function DependentProvider({ children }: { children: React.ReactNode }) {
 			email: item?.user?.email,
 			sex: item?.user?.sex,
 			phoneNumber: item?.user?.phone_number,
-			type: 'General',
 			birthDate: safeBirthDate,
 			careNotes: item?.care_notes || '',
 			notes: '',
@@ -327,7 +323,6 @@ export function DependentProvider({ children }: { children: React.ReactNode }) {
 			email: data?.user?.email ?? payload.email,
 			sex: data?.user?.sex ?? payload.sex,
 			phoneNumber: data?.user?.phone_number ?? payload.phone_number,
-			type: 'General',
 			birthDate: (data?.user?.birthdate ?? payload.birthdate).replace(/-/g, '/'),
 			careNotes: data?.care_notes ?? payload.care_notes,
 			notes: '',
@@ -394,7 +389,6 @@ export function DependentProvider({ children }: { children: React.ReactNode }) {
 			email: data?.user?.email ?? payload.email,
 			sex: data?.user?.sex ?? payload.sex,
 			phoneNumber: data?.user?.phone_number ?? payload.phone_number,
-			type: 'General',
 			birthDate: (data?.user?.birthdate ?? payload.birthdate).replace(/-/g, '/'),
 			careNotes: data?.care_notes ?? payload.care_notes,
 			notes: '',

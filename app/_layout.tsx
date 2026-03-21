@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { MD3LightTheme, PaperProvider } from "react-native-paper";
 import ReminderModal from "../components/modals/reminderModal";
 import { AuthProvider, useAuth } from "../context/AuthContext";
+import { CareSpacesProvider } from "../context/CareSpacesContext";
 import { ChatbotProvider } from "../context/ChatbotContext";
 import { DependentProvider } from "../context/DependentContext";
 import { TasksProvider, useTasks } from "../context/TasksContext";
@@ -69,29 +70,31 @@ export default function RootLayout() {
           <ChatbotProvider>
             <DependentProvider>
               <TasksProvider>
-                <PaperProvider theme={MD3LightTheme}>
-                  <ReminderMounts />
-                  <RouteGuard>
-                    <Stack>
-                      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                      <Stack.Screen name="login" options={{ headerShown: false }} />
-                      <Stack.Screen name="signup" options={{ headerShown: false }} />
-                      <Stack.Screen name="addTaskPage" options={{ headerShown: false }} />
-                      <Stack.Screen name="editTaskPage" options={{ headerShown: false }} />
-                      <Stack.Screen name="taskDetails" options={{ headerShown: false }} />
-                      <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} />
-                      <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} />
-                      <Stack.Screen name="aiChat" options={{ headerShown: false }} />
-                      <Stack.Screen name="dependentProfile" options={{ headerShown: false }} />
-                      <Stack.Screen name="profileAndAccount" options={{ headerShown: false }} />
-                      <Stack.Screen name="editProfile" options={{ headerShown: false }} />
-                      <Stack.Screen name="settings" options={{ headerShown: false }} />
-                      <Stack.Screen name="addDependent" options={{ headerShown: false }} />
-                      <Stack.Screen name="editDependent" options={{ headerShown: false }} />
-                      <Stack.Screen name="dependentAccount" options={{ headerShown: false }} />
-                    </Stack>
-                  </RouteGuard>
-                </PaperProvider>
+                <CareSpacesProvider>
+                  <PaperProvider theme={MD3LightTheme}>
+                    <ReminderMounts />
+                    <RouteGuard>
+                      <Stack>
+                        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                        <Stack.Screen name="login" options={{ headerShown: false }} />
+                        <Stack.Screen name="signup" options={{ headerShown: false }} />
+                        <Stack.Screen name="addTaskPage" options={{ headerShown: false }} />
+                        <Stack.Screen name="editTaskPage" options={{ headerShown: false }} />
+                        <Stack.Screen name="taskDetails" options={{ headerShown: false }} />
+                        <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} />
+                        <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} />
+                        <Stack.Screen name="aiChat" options={{ headerShown: false }} />
+                        <Stack.Screen name="dependentProfile" options={{ headerShown: false }} />
+                        <Stack.Screen name="profileAndAccount" options={{ headerShown: false }} />
+                        <Stack.Screen name="editProfile" options={{ headerShown: false }} />
+                        <Stack.Screen name="settings" options={{ headerShown: false }} />
+                        <Stack.Screen name="addDependent" options={{ headerShown: false }} />
+                        <Stack.Screen name="editDependent" options={{ headerShown: false }} />
+                        <Stack.Screen name="dependentAccount" options={{ headerShown: false }} />
+                      </Stack>
+                    </RouteGuard>
+                  </PaperProvider>
+                </CareSpacesProvider>
               </TasksProvider>
             </DependentProvider>
           </ChatbotProvider>
