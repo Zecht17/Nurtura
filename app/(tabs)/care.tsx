@@ -4,9 +4,10 @@ import AddCaregiverModal from "@/components/modals/addCaregiverModal";
 import AddDependentModal from "@/components/modals/addDependentModal";
 import { styles } from "@/components/styles/care-css";
 import { useCareSpaces } from "@/context/CareSpacesContext";
+import { useDependents } from "@/context/DependentContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { StatusBar, Text, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,7 +17,24 @@ export default function CareScreen() {
     const [isAddCaregiverVisible, setIsAddCaregiverVisible] = useState(false);
     const [isAddDependentVisible, setIsAddDependentVisible] = useState(false);
     const [activeCareSpaceId, setActiveCareSpaceId] = useState<string | null>(null);
-    const { careSpaces, createCareSpace, addDependentToCareSpace } = useCareSpaces();
+    const { careSpaces, createCareSpace, joinCareSpaceViaCode, addDependentToCareSpace } = useCareSpaces();
+    const { dependents } = useDependents();
+
+    const activeCareSpace = useMemo(
+        () => (activeCareSpaceId ? careSpaces.find((space) => space.id === activeCareSpaceId) : undefined),
+        [activeCareSpaceId, careSpaces],
+    );
+
+    const addableDependentNames = useMemo(() => {
+        const existingNames = new Set(
+            (activeCareSpace?.dependents || []).map((dependent) => dependent.name.trim().toLowerCase()),
+        );
+
+        return dependents
+            .map((dependent) => dependent.name.trim())
+            .filter((name) => name.length > 0)
+            .filter((name) => !existingNames.has(name.toLowerCase()));
+    }, [dependents, activeCareSpace]);
 
     const handleAddDependentToCareSpace = (dependentName: string) => {
         const careSpaceId = activeCareSpaceId;
@@ -48,7 +66,7 @@ export default function CareScreen() {
                     </View>
 
                     {/* This is for the buttons */}
-                    <CareButtons onCreateCareSpace={createCareSpace} />
+                    <CareButtons onCreateCareSpace={createCareSpace} onJoinCareSpace={joinCareSpaceViaCode} />
 
                     {/* This section is for the care container */}
                     {careSpaces.map((careSpace) => (
@@ -56,6 +74,7 @@ export default function CareScreen() {
                             key={careSpace.id}
                             title={careSpace.title}
                             description={careSpace.description}
+                            currentUserRole={careSpace.currentUserRole}
                             familyMembers={careSpace.familyMembers}
                             caregivers={careSpace.caregivers}
                             dependents={careSpace.dependents}
@@ -86,6 +105,7 @@ export default function CareScreen() {
                             setIsAddDependentVisible(false);
                             setActiveCareSpaceId(null);
                         }}
+                        dependents={addableDependentNames}
                         onAddDependent={handleAddDependentToCareSpace}
                     />
 

@@ -7,7 +7,7 @@ interface JoinCareSpaceModalProps {
     visible: boolean;
     initialCode?: string;
     onClose: () => void;
-    onJoin?: (code: string) => void;
+    onJoin?: (code: string) => Promise<void> | void;
 }
 
 export default function JoinCareSpaceModal({
@@ -17,16 +17,40 @@ export default function JoinCareSpaceModal({
     onJoin,
 }: JoinCareSpaceModalProps) {
     const [code, setCode] = React.useState(initialCode);
+    const [submitting, setSubmitting] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         if (visible) {
             setCode(initialCode);
+            setSubmitting(false);
+            setError(null);
         }
     }, [visible, initialCode]);
 
-    const handleJoin = () => {
-        if (onJoin) {
-            onJoin(code.trim());
+    const handleJoin = async () => {
+        const normalizedCode = code.trim();
+
+        if (!normalizedCode) {
+            setError("Care space code is required.");
+            return;
+        }
+
+        if (!onJoin) {
+            setError("Join action is unavailable right now.");
+            return;
+        }
+
+        setSubmitting(true);
+        setError(null);
+
+        try {
+            await onJoin(normalizedCode);
+        } catch (joinError) {
+            const message = joinError instanceof Error ? joinError.message : "Unable to join care space right now.";
+            setError(message);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -55,7 +79,7 @@ export default function JoinCareSpaceModal({
                             placeholder="ABC-DEF"
                             placeholderTextColor="#999"
                             style={styles.input}
-                            autoCapitalize="characters"
+                            autoCapitalize="none"
                             autoCorrect={false}
                             keyboardType="default"
                         />
@@ -63,14 +87,16 @@ export default function JoinCareSpaceModal({
 
                     <Text style={styles.helpText}>Ask the care space owner for the invite code</Text>
 
-                    <Pressable onPress={handleJoin} style={styles.ctaWrapper}>
+                    {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                    <Pressable onPress={handleJoin} style={styles.ctaWrapper} disabled={submitting}>
                         <LinearGradient
                             colors={["#7C6FDC", "#9C88F2"]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
-                            style={styles.ctaButton}
+                            style={[styles.ctaButton, submitting ? styles.ctaButtonDisabled : null]}
                         >
-                            <Text style={styles.ctaText}>Join Care Space</Text>
+                            <Text style={styles.ctaText}>{submitting ? "Joining..." : "Join Care Space"}</Text>
                         </LinearGradient>
                     </Pressable>
                 </View>
@@ -157,9 +183,18 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         alignItems: "center",
     },
+    ctaButtonDisabled: {
+        opacity: 0.65,
+    },
     ctaText: {
         color: "#ffffff",
         fontSize: 16,
         // fontWeight: "700",
+    },
+    errorText: {
+        color: "#D14343",
+        fontSize: 14,
+        marginTop: 10,
+        textAlign: "center",
     },
 });

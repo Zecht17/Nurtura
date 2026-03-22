@@ -8,39 +8,70 @@ type InviteRole = "Viewer" | "Editor";
 
 interface ManageAccessModalProps {
     visible: boolean;
-    initialCode?: string;
+    memberName?: string;
     initialRole?: InviteRole;
     onClose: () => void;
-    onGenerate?: (payload: { code: string; role: InviteRole }) => void;
-    onRemoveMember?: () => void;
+    onSaveAccess?: (payload: { role: InviteRole }) => Promise<void> | void;
+    onRemoveMember?: () => Promise<void> | void;
 }
 
 export default function ManageAccessModal({
     visible,
-    initialCode = "",
+    memberName,
     initialRole = "Viewer",
     onClose,
-    onGenerate,
+    onSaveAccess,
     onRemoveMember,
 }: ManageAccessModalProps) {
     const [role, setRole] = React.useState<InviteRole>(initialRole);
     const [roleMenuOpen, setRoleMenuOpen] = React.useState(false);
+    const [busyAction, setBusyAction] = React.useState<"save" | "remove" | null>(null);
+    const [errorText, setErrorText] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         if (visible) {
             setRole(initialRole);
             setRoleMenuOpen(false);
+            setBusyAction(null);
+            setErrorText(null);
         }
-    }, [visible, initialCode, initialRole]);
+    }, [visible, initialRole, memberName]);
 
-    const handleSaveAccess = () => {
-        if (onGenerate) {
-            onGenerate({
-                code: initialCode.trim(),
-                role,
-            });
+    const handleSaveAccess = async () => {
+        if (!onSaveAccess) {
+            return;
+        }
+
+        try {
+            setBusyAction("save");
+            setErrorText(null);
+            await onSaveAccess({ role });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Unable to update member access.";
+            setErrorText(message);
+        } finally {
+            setBusyAction(null);
         }
     };
+
+    const handleRemoveMember = async () => {
+        if (!onRemoveMember) {
+            return;
+        }
+
+        try {
+            setBusyAction("remove");
+            setErrorText(null);
+            await onRemoveMember();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Unable to remove member.";
+            setErrorText(message);
+        } finally {
+            setBusyAction(null);
+        }
+    };
+
+    const isBusy = busyAction !== null;
 
     return (
         <Modal
@@ -56,11 +87,17 @@ export default function ManageAccessModal({
                     </Pressable>
 
                     <Text style={styles.title}>Manage Access</Text>
-                    <Text style={styles.subtitle}>Choose whether this user can view or edit</Text>
+                    <Text style={styles.subtitle}>
+                        {memberName ? `Update access for ${memberName}` : "Choose whether this user can view or edit"}
+                    </Text>
 
                     <Text style={styles.label}>User&apos;s Role</Text>
 
-                    <Pressable style={styles.roleSelect} onPress={() => setRoleMenuOpen((prev) => !prev)}>
+                    <Pressable
+                        style={styles.roleSelect}
+                        onPress={() => setRoleMenuOpen((prev) => !prev)}
+                        disabled={isBusy}
+                    >
                         <Text style={styles.roleText}>{role}</Text>
                         <Feather name={roleMenuOpen ? "chevron-up" : "chevron-down"} size={18} color="#111" />
                     </Pressable>
@@ -75,6 +112,7 @@ export default function ManageAccessModal({
                                     setRole("Viewer");
                                     setRoleMenuOpen(false);
                                 }}
+                                disabled={isBusy}
                             >
                                 <Text style={styles.roleOptionText}>Viewer</Text>
                             </Pressable>
@@ -84,26 +122,33 @@ export default function ManageAccessModal({
                                     setRole("Editor");
                                     setRoleMenuOpen(false);
                                 }}
+                                disabled={isBusy}
                             >
                                 <Text style={styles.roleOptionText}>Editor</Text>
                             </Pressable>
                         </View>
                     ) : null}
 
+                    {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+
                     <View style={styles.actionRow}>
-                        <Pressable onPress={handleSaveAccess} style={styles.actionButton}>
+                        <Pressable onPress={handleSaveAccess} style={styles.actionButton} disabled={isBusy}>
                             <LinearGradient
                                 colors={["#7C6FDC", "#A884D6"]}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                                 style={styles.saveButton}
                             >
-                                <Text style={styles.saveButtonText}>Save Access</Text>
+                                <Text style={styles.saveButtonText}>{busyAction === "save" ? "Saving..." : "Save Access"}</Text>
                             </LinearGradient>
                         </Pressable>
 
-                        <Pressable style={[styles.actionButton, styles.removeButton]} onPress={onRemoveMember}>
-                            <Text style={styles.removeButtonText}>Remove Member</Text>
+                        <Pressable
+                            style={[styles.actionButton, styles.removeButton, isBusy ? styles.disabledButton : null]}
+                            onPress={handleRemoveMember}
+                            disabled={isBusy}
+                        >
+                            <Text style={styles.removeButtonText}>{busyAction === "remove" ? "Removing..." : "Remove Member"}</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -175,6 +220,12 @@ const styles = StyleSheet.create({
         fontSize: 13,
         lineHeight: 18,
     },
+    errorText: {
+        marginTop: 10,
+        color: "#c0392b",
+        fontSize: 13,
+        lineHeight: 18,
+    },
     roleMenu: {
         marginTop: 8,
         borderRadius: 12,
@@ -215,6 +266,9 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: "#e60012",
+    },
+    disabledButton: {
+        opacity: 0.65,
     },
     removeButtonText: {
         color: "#ffffff",

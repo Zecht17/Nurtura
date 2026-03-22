@@ -1,4 +1,5 @@
 import EditableTaskCard from "@/components/cards/editableTaskCard";
+import NoPendingTask from "@/components/cards/noPendingTask";
 import EditorRoleCard from "@/components/cards/editorRoleCard";
 import OwnerRoleCard from "@/components/cards/ownerRoleCard";
 import ViewerRoleCard from "@/components/cards/viewerRoleCard";
@@ -17,6 +18,7 @@ import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
 import { useCareSpaces } from "@/context/CareSpacesContext";
+import { useDependents } from "@/context/DependentContext";
 import { Feather } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
@@ -25,13 +27,14 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Pressable, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type RoleLabel = "Owner" | "Editor" | "Viewer";
 
 type PersonWithRole = {
+    memberId?: number;
     initial: string;
     name: string;
     role: RoleLabel;
@@ -98,6 +101,7 @@ const parsePeopleWithRole = (value: string | string[] | undefined, fallback: Per
         const normalized = parsed
             .filter((item): item is PersonWithRole => typeof item === "object" && item !== null)
             .map((item) => ({
+                memberId: typeof (item as { memberId?: unknown }).memberId === "number" ? (item as { memberId: number }).memberId : undefined,
                 initial: typeof item.initial === "string" ? item.initial : getInitial(typeof item.name === "string" ? item.name : ""),
                 name: typeof item.name === "string" ? item.name : "Unknown",
                 role: item.role === "Owner" || item.role === "Editor" || item.role === "Viewer" ? item.role : "Viewer",
@@ -159,9 +163,25 @@ export default function CareSpaceSettings() {
         tasks?: string;
     }>();
 
-    const { careSpaces, updateCareSpaceInfo, addDependentToCareSpace, removeTaskFromCareSpace } = useCareSpaces();
+    const {
+        careSpaces,
+        updateCareSpace,
+        deleteCareSpace,
+        addMembersToCareSpaceBulk,
+        updateCareSpaceMember,
+        removeCareSpaceMember,
+        updateCareSpaceInfo,
+        addDependentToCareSpace,
+        removeTaskFromCareSpace,
+        generateJoinCode,
+    } = useCareSpaces();
+    const { dependents } = useDependents();
     const careSpaceId = getParamValue(params.id);
     const selectedCareSpace = careSpaceId ? careSpaces.find((item) => item.id === careSpaceId) : undefined;
+    const currentUserRole = selectedCareSpace?.currentUserRole;
+    const canEditCareSpaceInfo = currentUserRole === "Owner";
+    const canDeleteCareSpace = currentUserRole === "Owner";
+    const canAddMembers = currentUserRole === "Owner";
 
     const initialSpaceName = (selectedCareSpace?.title ?? getParamValue(params.title)?.trim()) || "Emma's Care";
     const initialDescription = (selectedCareSpace?.description ?? getParamValue(params.description)?.trim()) || "Case for Emma";
@@ -190,9 +210,22 @@ export default function CareSpaceSettings() {
     const [showDeleteCareSpaceModal, setShowDeleteCareSpaceModal] = useState(false);
     const [showAddDependentModal, setShowAddDependentModal] = useState(false);
     const [manageAccessRole, setManageAccessRole] = useState<"Viewer" | "Editor">("Viewer");
+    const [selectedManagedMember, setSelectedManagedMember] = useState<PersonWithRole | null>(null);
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
     const [nowMs, setNowMs] = useState(Date.now());
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const [inviteCode, setInviteCode] = useState("");
+
+    const addableDependentNames = dependents
+        .map((dependent) => dependent.name.trim())
+        .filter((name) => name.length > 0)
+        .filter((name) => !dependentNames.some((existing) => existing.toLowerCase() === name.toLowerCase()));
+
+    const resolveCareSpaceNumericId = () => {
+        const source = (careSpaceId || selectedCareSpace?.id || "").replace("care-space-", "");
+        const parsed = Number.parseInt(source, 10);
+        return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    };
 
     useEffect(() => {
         setSpaceName(initialSpaceName);
@@ -204,6 +237,7 @@ export default function CareSpaceSettings() {
         setDependentNames(initialDependents);
         setCareSpaceTasks(initialCareSpaceTasks);
         setPendingDeleteId(null);
+        setSelectedManagedMember(null);
     }, [
         initialSpaceName,
         initialDescription,
@@ -215,24 +249,41 @@ export default function CareSpaceSettings() {
     ]);
 
     const handleInfoEdit = () => {
+        if (!canEditCareSpaceInfo) {
+            return;
+        }
+
         setDraftSpaceName(spaceName);
         setDraftDescription(description);
         setIsEditingInfo(true);
     };
 
-    const handleInfoSave = () => {
-        // TODO: Persist `spaceName` and `description` to backend/context.
+    const handleInfoSave = async () => {
         const nextTitle = draftSpaceName.trim() || "Emma's Care";
         const nextDescription = draftDescription.trim() || "-";
 
-        setSpaceName(nextTitle);
-        setDescription(nextDescription);
+        try {
+            const numericCareSpaceId = resolveCareSpaceNumericId();
 
-        if (careSpaceId) {
-            updateCareSpaceInfo(careSpaceId, { title: nextTitle, description: nextDescription });
+            if (numericCareSpaceId) {
+                await updateCareSpace(numericCareSpaceId, {
+                    name: nextTitle,
+                    description: nextDescription,
+                });
+            }
+
+            setSpaceName(nextTitle);
+            setDescription(nextDescription);
+
+            if (careSpaceId) {
+                updateCareSpaceInfo(careSpaceId, { title: nextTitle, description: nextDescription });
+            }
+
+            setIsEditingInfo(false);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Unable to update care space.";
+            Alert.alert("Update Failed", message);
         }
-
-        setIsEditingInfo(false);
     };
 
     const handleInfoCancel = () => {
@@ -241,8 +292,13 @@ export default function CareSpaceSettings() {
         setIsEditingInfo(false);
     };
 
-    const openManageAccess = (role: "Viewer" | "Editor") => {
-        setManageAccessRole(role);
+    const openManageAccess = (member: PersonWithRole) => {
+        if (!canAddMembers || member.role === "Owner") {
+            return;
+        }
+
+        setSelectedManagedMember(member);
+        setManageAccessRole(member.role === "Editor" ? "Editor" : "Viewer");
         setShowManageAccessModal(true);
     };
 
@@ -263,7 +319,7 @@ export default function CareSpaceSettings() {
                     key={`${keyPrefix}-${member.name}`}
                     name={member.name}
                     initial={member.initial}
-                    onPress={() => openManageAccess("Editor")}
+                    onPress={() => openManageAccess(member)}
                 />
             );
         }
@@ -273,7 +329,7 @@ export default function CareSpaceSettings() {
                 key={`${keyPrefix}-${member.name}`}
                 name={member.name}
                 initial={member.initial}
-                onPress={() => openManageAccess("Viewer")}
+                onPress={() => openManageAccess(member)}
             />
         );
     };
@@ -377,7 +433,7 @@ export default function CareSpaceSettings() {
                     <View style={styles.careInfoContainer}>
                         <View style={styles.careInfoRow}>
                         <Text style={styles.careInfoTitle}>Care Space Information</Text>
-                            {isEditingInfo ? (
+                            {isEditingInfo && canEditCareSpaceInfo ? (
                                 <View style={styles.actionRow}>
                                     <Pressable style={[styles.editButton, styles.saveButton]} onPress={handleInfoSave}>
                                         <Text style={styles.saveButtonText}>Save</Text>
@@ -386,7 +442,7 @@ export default function CareSpaceSettings() {
                                         <Text style={styles.editButtonText}>Cancel</Text>
                                     </Pressable>
                                 </View>
-                            ) : (
+                            ) : canEditCareSpaceInfo ? (
                                 <View style={styles.actionRow}>
                                     <Pressable style={styles.editButton} onPress={handleInfoEdit}>
                                         <Feather name="edit" size={16} color="black" />
@@ -397,7 +453,7 @@ export default function CareSpaceSettings() {
                                         <Text style={styles.editButtonText}>Invite</Text>
                                     </Pressable>
                                 </View>
-                            )}
+                            ) : null}
                         </View>
 
                         {/* This is for the Care Space Details */}
@@ -474,10 +530,12 @@ export default function CareSpaceSettings() {
                                 <Text style={styles.careInfoTitle}>({dependentNames.length})</Text>
                             </View>
                         
-                        <Pressable style={styles.editButton} onPress={() => setShowAddDependentModal(true)}>
-                            <FontAwesome6 name="add" size={14} color="black" />
-                            <Text style={styles.editButtonText}>Add Dependent</Text>
-                        </Pressable>
+                        {canAddMembers ? (
+                            <Pressable style={styles.editButton} onPress={() => setShowAddDependentModal(true)}>
+                                <FontAwesome6 name="add" size={14} color="black" />
+                                <Text style={styles.editButtonText}>Add Dependent</Text>
+                            </Pressable>
+                        ) : null}
                         </View>
 
                         {/* This is for the Dependent Details */}
@@ -487,7 +545,6 @@ export default function CareSpaceSettings() {
                                 name={name}
                                 initial={getInitial(name)}
                                 dependentStyle
-                                onPress={() => openManageAccess("Viewer")}
                             />
                         ))}
                     </View>
@@ -507,81 +564,133 @@ export default function CareSpaceSettings() {
                         </Pressable>
                         </View>
                         {/* This is for the task card */}
-                        <ScrollView>
+                        {decoratedTasks.length === 0 ? (
                             <View style={styles.taskContainer}>
-                                {decoratedTasks.map((task) => (
-                                    <EditableTaskCard
-                                        key={task.id}
-                                        value={task.id}
-                                    selectedTask={selectedTask}
-                                    onSelect={setSelectedTask}
-                                    title={task.title}
-                                    dependent={task.dependent}
-                                    description={task.description}
-                                    statusTags={
-                                        <>
-                                            {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
-                                            {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
-                                            {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
-                                        </>
-                                    }
-                                    dateTag={renderDateTag(task.dueDate, task.dueTime)}
-                                    onEdit={() => router.push({ pathname: "/editTaskPage", params: { id: task.id } })}
-                                    onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
-                                    onDelete={() => setPendingDeleteId(task.id)}
-                                />
-                            ))}
-
-                                <DeleteTaskModal
-                                    visible={pendingDeleteId !== null}
-                                    taskTitle={careSpaceTasks.find((taskItem) => taskItem.id === pendingDeleteId)?.title}
-                                    onConfirm={() => {
-                                        if (pendingDeleteId) {
-                                            setCareSpaceTasks((prev) => prev.filter((taskItem) => taskItem.id !== pendingDeleteId));
-
-                                            if (careSpaceId) {
-                                                removeTaskFromCareSpace(careSpaceId, pendingDeleteId);
-                                            }
-                                        }
-                                        setPendingDeleteId(null);
-                                    }}
-                                    onCancel={() => setPendingDeleteId(null)}
-                                />
+                                <NoPendingTask />
                             </View>
-                        </ScrollView>
+                        ) : (
+                            <ScrollView>
+                                <View style={styles.taskContainer}>
+                                    {decoratedTasks.map((task) => (
+                                        <EditableTaskCard
+                                            key={task.id}
+                                            value={task.id}
+                                        selectedTask={selectedTask}
+                                        onSelect={setSelectedTask}
+                                        title={task.title}
+                                        dependent={task.dependent}
+                                        description={task.description}
+                                        statusTags={
+                                            <>
+                                                {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
+                                                {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
+                                                {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
+                                            </>
+                                        }
+                                        dateTag={renderDateTag(task.dueDate, task.dueTime)}
+                                        onEdit={() => router.push({ pathname: "/editTaskPage", params: { id: task.id } })}
+                                        onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
+                                        onDelete={() => setPendingDeleteId(task.id)}
+                                    />
+                                ))}
+                                </View>
+                            </ScrollView>
+                        )}
+
+                        <DeleteTaskModal
+                            visible={pendingDeleteId !== null}
+                            taskTitle={careSpaceTasks.find((taskItem) => taskItem.id === pendingDeleteId)?.title}
+                            onConfirm={() => {
+                                if (pendingDeleteId) {
+                                    setCareSpaceTasks((prev) => prev.filter((taskItem) => taskItem.id !== pendingDeleteId));
+
+                                    if (careSpaceId) {
+                                        removeTaskFromCareSpace(careSpaceId, pendingDeleteId);
+                                    }
+                                }
+                                setPendingDeleteId(null);
+                            }}
+                            onCancel={() => setPendingDeleteId(null)}
+                        />
 
                     </View>
 
                     {/* This is for the Delete care space */}
-                    <View style={styles.dangerContainer}>
-						<Text style={styles.dangerTitle}>Delete Care Space</Text>
-						<Text style={styles.dangerSubTitle}>Permanently remove this care space. This action cannot be undone.</Text>
-                        <Pressable style={styles.dangerButton} onPress={() => setShowDeleteCareSpaceModal(true)}>
-							<AntDesign name="exclamation-circle" size={16} color="#ffffff" />
-							<Text style={styles.dangerButtonText}>Delete Care Space</Text>
-                        </Pressable>
-					</View>
+                    {canDeleteCareSpace ? (
+                        <View style={styles.dangerContainer}>
+                            <Text style={styles.dangerTitle}>Delete Care Space</Text>
+                            <Text style={styles.dangerSubTitle}>Permanently remove this care space. This action cannot be undone.</Text>
+                            <Pressable style={styles.dangerButton} onPress={() => setShowDeleteCareSpaceModal(true)}>
+                                <AntDesign name="exclamation-circle" size={16} color="#ffffff" />
+                                <Text style={styles.dangerButtonText}>Delete Care Space</Text>
+                            </Pressable>
+                        </View>
+                    ) : null}
 
                     <GenerateCsCodeModal
                         visible={showGenerateCodeModal}
-                        initialCode="ABC-DEF"
+                        initialCode={inviteCode}
                         initialRole="Viewer"
                         onClose={() => setShowGenerateCodeModal(false)}
-                        onGenerate={() => setShowGenerateCodeModal(false)}
+                        onGenerate={async ({ role }) => {
+                            const numericCareSpaceId = resolveCareSpaceNumericId();
+
+                            if (!numericCareSpaceId) {
+                                throw new Error("Unable to resolve care space ID for invite code generation.");
+                            }
+
+                            const code = await generateJoinCode(numericCareSpaceId, role);
+                            setInviteCode(code);
+                            return code;
+                        }}
                     />
 
                     <ManageAccessModal
                         visible={showManageAccessModal}
+                        memberName={selectedManagedMember?.name}
                         initialRole={manageAccessRole}
-                        onClose={() => setShowManageAccessModal(false)}
-                        onGenerate={() => setShowManageAccessModal(false)}
-                        onRemoveMember={() => setShowManageAccessModal(false)}
+                        onClose={() => {
+                            setShowManageAccessModal(false);
+                            setSelectedManagedMember(null);
+                        }}
+                        onSaveAccess={async ({ role }) => {
+                            if (!canAddMembers) {
+                                throw new Error("Only the owner can manage member access.");
+                            }
+
+                            const memberId = selectedManagedMember?.memberId;
+                            if (!memberId) {
+                                throw new Error("Unable to resolve member ID.");
+                            }
+
+                            await updateCareSpaceMember(memberId, {
+                                role_in_space: role.toLowerCase() as "viewer" | "editor",
+                            });
+
+                            setShowManageAccessModal(false);
+                            setSelectedManagedMember(null);
+                        }}
+                        onRemoveMember={async () => {
+                            if (!canAddMembers) {
+                                throw new Error("Only the owner can remove members.");
+                            }
+
+                            const memberId = selectedManagedMember?.memberId;
+                            if (!memberId) {
+                                throw new Error("Unable to resolve member ID.");
+                            }
+
+                            await removeCareSpaceMember(memberId);
+                            setShowManageAccessModal(false);
+                            setSelectedManagedMember(null);
+                        }}
                     />
 
                     <AddDependentModal
                         visible={showAddDependentModal}
                         onClose={() => setShowAddDependentModal(false)}
-                        onAddDependent={(name) => {
+                        dependents={addableDependentNames}
+                        onAddDependent={async (name) => {
                             const trimmedName = name.trim();
 
                             if (trimmedName.length === 0) {
@@ -589,19 +698,44 @@ export default function CareSpaceSettings() {
                                 return;
                             }
 
-                            setDependentNames((prev) => {
-                                const alreadyExists = prev.some(
-                                    (item) => item.toLowerCase() === trimmedName.toLowerCase(),
+                            try {
+                                if (!canAddMembers) {
+                                    throw new Error("Only the owner can add members to this care space.");
+                                }
+
+                                const numericCareSpaceId = resolveCareSpaceNumericId();
+                                if (!numericCareSpaceId) {
+                                    throw new Error("Unable to resolve care space ID.");
+                                }
+
+                                const selectedDependent = dependents.find(
+                                    (dependent) => dependent.name.trim().toLowerCase() === trimmedName.toLowerCase(),
                                 );
+                                const targetUserId = selectedDependent?.userId;
 
-                                return alreadyExists ? prev : [...prev, trimmedName];
-                            });
+                                if (!targetUserId) {
+                                    throw new Error("Unable to resolve selected dependent user ID.");
+                                }
 
-                            if (careSpaceId) {
-                                addDependentToCareSpace(careSpaceId, trimmedName);
+                                await addMembersToCareSpaceBulk(numericCareSpaceId, [targetUserId]);
+
+                                if (careSpaceId) {
+                                    addDependentToCareSpace(careSpaceId, trimmedName);
+                                }
+
+                                setDependentNames((prev) => {
+                                    const alreadyExists = prev.some(
+                                        (item) => item.toLowerCase() === trimmedName.toLowerCase(),
+                                    );
+
+                                    return alreadyExists ? prev : [...prev, trimmedName];
+                                });
+
+                                setShowAddDependentModal(false);
+                            } catch (error) {
+                                const message = error instanceof Error ? error.message : "Unable to add dependent.";
+                                Alert.alert("Add Member Failed", message);
                             }
-
-                            setShowAddDependentModal(false);
                         }}
                     />
 
@@ -609,9 +743,25 @@ export default function CareSpaceSettings() {
                         visible={showDeleteCareSpaceModal}
                         careSpaceName={spaceName}
                         onCancel={() => setShowDeleteCareSpaceModal(false)}
-                        onConfirm={() => {
-                            setShowDeleteCareSpaceModal(false);
-                            router.back();
+                        onConfirm={async () => {
+                            try {
+                                if (!canDeleteCareSpace) {
+                                    throw new Error("Only the owner can delete this care space.");
+                                }
+
+                                const numericCareSpaceId = resolveCareSpaceNumericId();
+
+                                if (!numericCareSpaceId) {
+                                    throw new Error("Unable to resolve care space ID for deletion.");
+                                }
+
+                                await deleteCareSpace(numericCareSpaceId);
+                                setShowDeleteCareSpaceModal(false);
+                                router.back();
+                            } catch (error) {
+                                const message = error instanceof Error ? error.message : "Unable to delete care space.";
+                                Alert.alert("Delete Failed", message);
+                            }
                         }}
                     />
 

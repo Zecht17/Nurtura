@@ -11,7 +11,7 @@ interface GenerateCsCodeModalProps {
     initialCode?: string;
     initialRole?: InviteRole;
     onClose: () => void;
-    onGenerate?: (payload: { code: string; role: InviteRole }) => void;
+    onGenerate?: (payload: { role: InviteRole }) => Promise<string | void> | string | void;
 }
 
 export default function GenerateCsCodeModal({
@@ -25,6 +25,8 @@ export default function GenerateCsCodeModal({
     const [role, setRole] = React.useState<InviteRole>(initialRole);
     const [roleMenuOpen, setRoleMenuOpen] = React.useState(false);
     const [isCodeInputActive, setIsCodeInputActive] = React.useState(false);
+    const [submitting, setSubmitting] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         if (visible) {
@@ -32,25 +34,35 @@ export default function GenerateCsCodeModal({
             setRole(initialRole);
             setRoleMenuOpen(false);
             setIsCodeInputActive(false);
+            setSubmitting(false);
+            setError(null);
         }
     }, [visible, initialCode, initialRole]);
 
-    const generateCareSpaceCode = () => {
-        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        const take = (length: number) => {
-            let value = "";
-            for (let i = 0; i < length; i += 1) {
-                value += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
-            return value;
-        };
-        return `${take(3)}-${take(3)}`;
-    };
+    const handleGenerate = async () => {
+        if (!onGenerate) {
+            setError("Invite generation is unavailable right now.");
+            return;
+        }
 
-    const handleGenerate = () => {
-        const generatedCode = generateCareSpaceCode();
-        setCode(generatedCode);
-        setIsCodeInputActive(true);
+        setSubmitting(true);
+        setError(null);
+
+        try {
+            const generatedCode = await onGenerate({ role });
+
+            if (!generatedCode || generatedCode.trim().length === 0) {
+                throw new Error("No invite code returned by the server.");
+            }
+
+            setCode(generatedCode);
+            setIsCodeInputActive(true);
+        } catch (requestError) {
+            const message = requestError instanceof Error ? requestError.message : "Unable to generate code right now.";
+            setError(message);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -120,14 +132,16 @@ export default function GenerateCsCodeModal({
                         </View>
                     ) : null}
 
-                    <Pressable onPress={handleGenerate} style={styles.ctaWrapper}>
+                    {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                    <Pressable onPress={handleGenerate} style={styles.ctaWrapper} disabled={submitting}>
                         <LinearGradient
                             colors={["#7C6FDC", "#9C88F2"]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
-                            style={styles.ctaButton}
+                            style={[styles.ctaButton, submitting ? styles.ctaButtonDisabled : null]}
                         >
-                            <Text style={styles.ctaText}>Generate Code</Text>
+                            <Text style={styles.ctaText}>{submitting ? "Generating..." : "Generate Code"}</Text>
                         </LinearGradient>
                     </Pressable>
                 </View>
@@ -240,9 +254,18 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         alignItems: "center",
     },
+    ctaButtonDisabled: {
+        opacity: 0.65,
+    },
     ctaText: {
         color: "#ffffff",
         fontSize: 16,
         // fontWeight: "700",
+    },
+    errorText: {
+        color: "#D14343",
+        fontSize: 14,
+        marginTop: 12,
+        textAlign: "center",
     },
 });

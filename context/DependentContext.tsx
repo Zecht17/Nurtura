@@ -4,6 +4,7 @@ import { API_URL, useAuth } from './AuthContext';
 export type Dependent = {
 	id: string;
 	dependentId?: number;
+	userId?: number;
 	name: string;
 	firstName?: string;
 	middleName?: string;
@@ -55,6 +56,7 @@ type DependentProfileApiItem = {
 	care_notes?: string;
 	dependent_id?: number;
 	user?: {
+		user_id?: number;
 		first_name?: string;
 		middle_name?: string;
 		last_name?: string;
@@ -131,6 +133,7 @@ export function DependentProvider({ children }: { children: React.ReactNode }) {
 		return {
 			id: `dep-${resolvedId}`,
 			dependentId: item?.dependent_id ?? fallbackId,
+			userId: item?.user?.user_id,
 			name: fullName || 'Unnamed Dependent',
 			firstName: item?.user?.first_name,
 			middleName: item?.user?.middle_name,
@@ -315,6 +318,7 @@ export function DependentProvider({ children }: { children: React.ReactNode }) {
 		const dependent: Dependent = {
 			id: `dep-${data?.dependent_id ?? Date.now()}`,
 			dependentId: data?.dependent_id,
+			userId: data?.user?.user_id,
 			name: fullName,
 			firstName: data?.user?.first_name ?? payload.first_name,
 			middleName: data?.user?.middle_name ?? payload.middle_name,
@@ -381,6 +385,7 @@ export function DependentProvider({ children }: { children: React.ReactNode }) {
 		const normalizedDependent: Dependent = {
 			id: `dep-${data?.dependent_id ?? dependentId}`,
 			dependentId: data?.dependent_id ?? dependentId,
+			userId: data?.user?.user_id,
 			name: fullName,
 			firstName: data?.user?.first_name ?? payload.first_name,
 			middleName: data?.user?.middle_name ?? payload.middle_name,

@@ -15,7 +15,7 @@ type AddDependentModalProps = {
 export default function AddDependentModal({
 	visible,
 	onClose,
-	dependents = ['Emma Johnson', 'Robert Thompson'],
+	dependents = [],
 	selectedDependent,
 	onSelectDependent,
 	onAddDependent,
@@ -51,17 +51,21 @@ export default function AddDependentModal({
 					<Text style={styles.subtitle}>Select a dependent to add to this care space</Text>
 
 					<View style={styles.optionsContainer}>
-						{dependents.map((name) => (
-							<View
-								key={name}
-								style={[
-									styles.optionWrapper,
-									localSelection === name ? styles.selectedOption : null,
-								]}
-							>
-								<DependentOption name={name} onPress={() => handleSelect(name)} />
-							</View>
-						))}
+						{dependents.length > 0 ? (
+							dependents.map((name) => (
+								<View
+									key={name}
+									style={[
+										styles.optionWrapper,
+										localSelection === name ? styles.selectedOption : null,
+									]}
+								>
+									<DependentOption name={name} onPress={() => handleSelect(name)} />
+								</View>
+							))
+						) : (
+							<Text style={styles.emptyStateText}>No available dependents to add.</Text>
+						)}
 					</View>
 
 					<Pressable
@@ -161,5 +165,11 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 		color: '#222',
 		fontWeight: '500',
+	},
+	emptyStateText: {
+		fontSize: 14,
+		color: '#6B7280',
+		textAlign: 'center',
+		paddingVertical: 10,
 	},
 });

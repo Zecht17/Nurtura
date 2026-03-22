@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Animated, KeyboardAvoidingView, Linking, Platform, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import Markdown from "react-native-markdown-display";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,6 +22,12 @@ export default function AIcareAssistant() {
 
     const scrollViewRef = useRef<ScrollView>(null);
     const [userMessage, setUserMessage] = useState("");
+    const dotAnims = useRef([
+        new Animated.Value(0.3),
+        new Animated.Value(0.3),
+        new Animated.Value(0.3),
+    ]).current;
+    const typingAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
 
     const handleSendMessage = async () => {
         const trimmed = userMessage.trim();
@@ -37,6 +43,38 @@ export default function AIcareAssistant() {
             scrollViewRef.current?.scrollToEnd({ animated: true });
         }
     }, [messages, loadingHistory, sending, loadingMoreHistory]);
+
+    useEffect(() => {
+        if (!sending) {
+            typingAnimationRef.current?.stop();
+            dotAnims.forEach((dot) => dot.setValue(0.3));
+            return;
+        }
+
+        const createPulse = (anim: Animated.Value) =>
+            Animated.sequence([
+                Animated.timing(anim, {
+                    toValue: 1,
+                    duration: 320,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(anim, {
+                    toValue: 0.3,
+                    duration: 320,
+                    useNativeDriver: true,
+                }),
+            ]);
+
+        typingAnimationRef.current = Animated.loop(
+            Animated.stagger(140, dotAnims.map((dot) => createPulse(dot))),
+        );
+        typingAnimationRef.current.start();
+
+        return () => {
+            typingAnimationRef.current?.stop();
+            dotAnims.forEach((dot) => dot.setValue(0.3));
+        };
+    }, [sending, dotAnims]);
 
     StatusBar.setBarStyle("dark-content");
 
@@ -96,6 +134,22 @@ export default function AIcareAssistant() {
                                     </View>
                                 </View>
                             ))}
+
+                            {sending && (
+                                <View style={aiStyles.typingRow}>
+                                    <View style={aiStyles.typingBubble}>
+                                        {dotAnims.map((anim, index) => (
+                                            <Animated.View
+                                                key={`typing-dot-${index}`}
+                                                style={[
+                                                    aiStyles.typingDot,
+                                                    { opacity: anim },
+                                                ]}
+                                            />
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
                         </ScrollView>
                         {/* Input area for the user to type their message */}
                         <View style={aiStyles.inputContainer}>
@@ -249,6 +303,26 @@ const aiStyles = StyleSheet.create({
         color: "#5e4ccf",
         fontSize: 13,
         fontWeight: "600",
+    },
+    typingRow: {
+        alignItems: "flex-start",
+        marginTop: 4,
+        marginBottom: 10,
+    },
+    typingBubble: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: "#efedf0",
+        borderRadius: 20,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    typingDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 999,
+        backgroundColor: "#8D88A4",
     },
 });
 

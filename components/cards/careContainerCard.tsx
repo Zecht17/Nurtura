@@ -20,6 +20,7 @@ type DependentPerson = {
 type CareContainerCardProps = {
     title: string;
     description: string;
+    currentUserRole?: RoleLabel;
     familyMembers: PersonWithRole[];
     caregivers: PersonWithRole[];
     dependents: DependentPerson[];
@@ -30,12 +31,15 @@ type CareContainerCardProps = {
 export default function CareContainerCard({
     title,
     description,
+    currentUserRole,
     familyMembers,
     caregivers,
     dependents,
     onPress,
     onAddDependent,
 }: CareContainerCardProps) {
+    const canAddDependent = currentUserRole === "Owner" && typeof onAddDependent === "function";
+
     return (
         <Pressable style={styles.careContainer} onPress={onPress}>
             <Text style={styles.careTitle}>{title}</Text>
@@ -81,16 +85,18 @@ export default function CareContainerCard({
 
             <View style={styles.caregiverRow}>
                 <Text style={styles.careSubTitle}>Dependents ({dependents.length})</Text>
-                <Pressable
-                    style={styles.addCaregiverButton}
-                    onPress={(event) => {
-                        event.stopPropagation();
-                        onAddDependent?.();
-                    }}
-                >
-                    <FontAwesome6 name="add" size={15} color="black" />
-                    <Text style={styles.addCaregiverText}>Add Dependents</Text>
-                </Pressable>
+                {canAddDependent ? (
+                    <Pressable
+                        style={styles.addCaregiverButton}
+                        onPress={(event) => {
+                            event.stopPropagation();
+                            onAddDependent?.();
+                        }}
+                    >
+                        <FontAwesome6 name="add" size={15} color="black" />
+                        <Text style={styles.addCaregiverText}>Add Dependents</Text>
+                    </Pressable>
+                ) : null}
             </View>
 
             <View style={styles.memberList}>

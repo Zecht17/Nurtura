@@ -261,7 +261,6 @@ export default function SignUpScreen() {
                 >
                   <Menu.Item onPress={() => { setRole("family_member"); setMenuVisible(false); }} title="Family Member" />
                   <Menu.Item onPress={() => { setRole("caregiver"); setMenuVisible(false); }} title="Caregiver" />
-                  <Menu.Item onPress={() => { setRole("dependent"); setMenuVisible(false); }} title="Dependent" />
                 </Menu>
               </View>
 

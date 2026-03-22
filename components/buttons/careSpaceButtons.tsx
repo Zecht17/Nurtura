@@ -1,5 +1,6 @@
 import CreateCarespaceModal from "@/components/modals/createCarespaceModal";
 import JoinCareSpaceModal from "@/components/modals/joinCarespaceModal";
+import type { CreateCareSpacePayload } from "@/context/CareSpacesContext";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,10 +17,11 @@ import {
 type Props = {
     createStyle?: StyleProp<ViewStyle>;
     joinStyle?: StyleProp<ViewStyle>;
-    onCreateCareSpace?: (payload: { name: string; description: string; type: string; selectedDependent: string | null }) => void;
+    onCreateCareSpace?: (payload: CreateCareSpacePayload) => Promise<void> | void;
+    onJoinCareSpace?: (code: string) => Promise<void> | void;
 };
 
-export default function CareButtons({ createStyle, joinStyle, onCreateCareSpace }: Props) {
+export default function CareButtons({ createStyle, joinStyle, onCreateCareSpace, onJoinCareSpace }: Props) {
     const [isCreateVisible, setIsCreateVisible] = useState(false);
     const [isJoinVisible, setIsJoinVisible] = useState(false);
 
@@ -70,14 +72,17 @@ export default function CareButtons({ createStyle, joinStyle, onCreateCareSpace 
             <JoinCareSpaceModal
                 visible={isJoinVisible}
                 onClose={() => setIsJoinVisible(false)}
-                onJoin={() => setIsJoinVisible(false)}
+                onJoin={async (code) => {
+                    await onJoinCareSpace?.(code);
+                    setIsJoinVisible(false);
+                }}
             />
 
             <CreateCarespaceModal
                 visible={isCreateVisible}
                 onClose={() => setIsCreateVisible(false)}
-                onCreate={(payload) => {
-                    onCreateCareSpace?.(payload);
+                onCreate={async (payload) => {
+                    await onCreateCareSpace?.(payload);
                     setIsCreateVisible(false);
                 }}
             />

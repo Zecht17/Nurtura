@@ -1,4 +1,6 @@
 import DependentOption from "@/components/cards/dependentOption";
+import type { CreateCareSpacePayload } from "@/context/CareSpacesContext";
+import { useDependents } from "@/context/DependentContext";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
@@ -8,35 +10,57 @@ import { TextInput } from "react-native-paper";
 interface CreateCarespaceModalProps {
     visible: boolean;
     onClose: () => void;
-    onCreate?: (payload: { name: string; description: string; type: string; selectedDependent: string | null }) => void;
+    onCreate?: (payload: CreateCareSpacePayload) => Promise<void> | void;
 }
 
 export default function CreateCarespaceModal({ visible, onClose, onCreate }: CreateCarespaceModalProps) {
     const [name, setName] = React.useState("");
     const [description, setDescription] = React.useState("");
-    const [type, setType] = useState("Select Type");
-    const [selectedDependent, setSelectedDependent] = useState<string | null>(null);
-    const [typeMenuVisible, setTypeMenuVisible] = useState(false);
-    const dependents = ["Emma Johnson", "Robert Thompson"];
+    const [selectedDependentUserId, setSelectedDependentUserId] = useState<number | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const { dependents } = useDependents();
 
     React.useEffect(() => {
         if (visible) {
             // Reset fields when opened to mimic a fresh form
             setName("");
             setDescription("");
-            setType("Select Type");
-            setSelectedDependent(null);
+            setSelectedDependentUserId(null);
+            setSubmitError(null);
         }
     }, [visible]);
 
-    const handleCreate = () => {
-        if (onCreate) {
-            onCreate({
-                name: name.trim(),
-                description: description.trim(),
-                type,
-                selectedDependent,
-            });
+    const resolveDependentUserId = (dependent: (typeof dependents)[number]) => {
+        return dependent.userId ?? dependent.dependentId ?? null;
+    };
+
+    const selectableDependents = dependents.filter((dependent) => typeof resolveDependentUserId(dependent) === "number");
+
+    const handleCreate = async () => {
+        const trimmedName = name.trim();
+
+        if (!trimmedName) {
+            setSubmitError("Care space name is required.");
+            return;
+        }
+
+        setSubmitError(null);
+        setSubmitting(true);
+
+        try {
+            if (onCreate) {
+                await onCreate({
+                    name: trimmedName,
+                    description: description.trim(),
+                    dependent_user_ids: selectedDependentUserId ? [selectedDependentUserId] : [],
+                });
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unable to create care space right now.";
+            setSubmitError(errorMessage);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -81,30 +105,36 @@ export default function CreateCarespaceModal({ visible, onClose, onCreate }: Cre
                     
                     {/* This is where the dependent selection will go */}
                     <View style={styles.depOptionsContainer}>
-                        {dependents.map((dependentName) => (
-                            <Pressable
-                                key={dependentName}
-                                onPress={() => setSelectedDependent(dependentName)}
-                                style={({ pressed }) => [
-                                    styles.optionWrapper,
-                                    selectedDependent === dependentName ? styles.selectedOption : null,
-                                    pressed ? styles.pressedOption : null,
-                                ]}
-                            >
-                                <DependentOption name={dependentName} />
-                            </Pressable>
-                        ))}
+                        {selectableDependents.length > 0 ? (
+                            selectableDependents.map((dependent) => (
+                                <Pressable
+                                    key={dependent.id}
+                                    onPress={() => setSelectedDependentUserId(resolveDependentUserId(dependent))}
+                                    style={({ pressed }) => [
+                                        styles.optionWrapper,
+                                        selectedDependentUserId === resolveDependentUserId(dependent) ? styles.selectedOption : null,
+                                        pressed ? styles.pressedOption : null,
+                                    ]}
+                                >
+                                    <DependentOption name={dependent.name} />
+                                </Pressable>
+                            ))
+                        ) : (
+                            <Text style={styles.emptyStateText}>No dependents available yet.</Text>
+                        )}
                     </View>
+
+                    {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
                     
 
-                    <Pressable onPress={handleCreate} style={styles.ctaWrapper}>
+                    <Pressable onPress={handleCreate} style={styles.ctaWrapper} disabled={submitting}>
                         <LinearGradient
                             colors={["#7C6FDC", "#9C88F2"]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
-                            style={styles.ctaButton}
+                            style={[styles.ctaButton, submitting ? styles.ctaButtonDisabled : null]}
                         >
-                            <Text style={styles.ctaText}>Create Care Space</Text>
+                            <Text style={styles.ctaText}>{submitting ? "Creating..." : "Create Care Space"}</Text>
                         </LinearGradient>
                     </Pressable>
                 </View>
@@ -196,6 +226,9 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         alignItems: "center",
     },
+    ctaButtonDisabled: {
+        opacity: 0.65,
+    },
     ctaText: {
         color: "#ffffff",
         fontSize: 16,
@@ -286,6 +319,21 @@ const styles = StyleSheet.create({
 
     pressedOption: {
         opacity: 0.9,
+    },
+
+    emptyStateText: {
+        color: "#7e7e7e",
+        fontSize: 14,
+        textAlign: "center",
+        marginBottom: 8,
+    },
+
+    errorText: {
+        color: "#D14343",
+        fontSize: 14,
+        marginTop: 10,
+        marginBottom: 2,
+        textAlign: "center",
     },
 
 });
