@@ -1,7 +1,7 @@
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { router } from "expo-router";
+import { type Href, router } from "expo-router";
 import React from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -50,7 +50,7 @@ export default function MoreFeaturesModal({ visible, onClose }: MoreFeaturesModa
 
     const handleNavigate = (route?: string) => {
         if (!route) return;
-        router.push(route);
+        router.push(route as Href);
         onClose();
     };
 

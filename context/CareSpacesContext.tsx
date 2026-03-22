@@ -150,6 +150,7 @@ type CareSpaceApiMember = {
 
 type CareSpaceApiItem = {
     care_space_id?: number;
+    creator_id?: number;
     name?: string;
     description?: string;
     creator?: CareSpaceApiUser;
@@ -170,6 +171,7 @@ export function CareSpacesProvider({ children }: { children: ReactNode }) {
 
     const mapApiCareSpaceToState = (item: CareSpaceApiItem): CareSpace => {
         const members = Array.isArray(item.members) ? item.members : [];
+        const creatorUserId = item.creator?.user_id ?? item.creator_id;
 
         const ownerMember = members.find((member) => (member?.role_in_space || "").toLowerCase() === "owner");
         const ownerName = ownerMember ? buildDisplayName(ownerMember.user) : buildDisplayName(item.creator);
@@ -181,7 +183,9 @@ export function CareSpacesProvider({ children }: { children: ReactNode }) {
 
         const currentUserRole = currentUserMember
             ? toRoleLabel(currentUserMember.role_in_space)
-            : undefined;
+            : typeof profileData?.user_id === "number" && typeof creatorUserId === "number" && profileData.user_id === creatorUserId
+                ? "Owner"
+                : undefined;
 
         const caregivers: PersonWithRole[] = members
             .filter((member) => (member?.role_in_space || "").toLowerCase() !== "owner")

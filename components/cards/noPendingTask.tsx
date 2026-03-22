@@ -1,14 +1,20 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { StyleSheet, Text, View } from "react-native";
 
-export default function NoPendingTask() {
+type NoPendingTaskProps = {
+    title?: string;
+    subtitle?: string;
+};
+
+export default function NoPendingTask({
+    title = "No pending tasks",
+    subtitle = "You're all caught up! Create a new task to get started.",
+}: NoPendingTaskProps) {
     return (
         <View style={styles.card}>
             <Ionicons name="time-outline" size={48} color="#8F99A7" style={styles.icon} />
-            <Text style={styles.title}>No pending tasks</Text>
-            <Text style={styles.subtitle}>
-                You're all caught up! Create a new task to get started.
-            </Text>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
             {/* <AddTaskButton style={styles.addButton} /> */}
         </View>
     );

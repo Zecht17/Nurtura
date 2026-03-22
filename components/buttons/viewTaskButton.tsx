@@ -1,12 +1,12 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
 import {
-	Pressable,
-	StyleProp,
-	StyleSheet,
-	Text,
-	View,
-	ViewStyle,
+  Pressable,
+  StyleProp,
+  StyleSheet,
+  Text,
+  View,
+  ViewStyle,
 } from "react-native";
 
 type Props = {
@@ -58,7 +58,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    width: 80,
+    // minwidth: 80,
+    paddingHorizontal: 10,
     height: 30,
     borderRadius: 16,
   },

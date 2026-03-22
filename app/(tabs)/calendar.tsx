@@ -1,5 +1,6 @@
 import AddTaskButton from "@/components/buttons/addTask";
 import TaskCard from "@/components/cards/taskCard";
+import CompleteTaskModal from "@/components/modals/CompleteTaskModal";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
@@ -9,12 +10,15 @@ import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
-import { useTasks } from "@/context/TasksContext";
+import { useDependents } from "@/context/DependentContext";
+import { useTasks } from "@/context/tasksContext";
+import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
+import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
 import Ionicicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { StatusBar, StyleSheet, Text, View } from "react-native";
+import { Alert, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,8 +26,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CalendarScreen() {
     const router = useRouter();
-    const { tasks } = useTasks();
+    const { dependents } = useDependents();
+    const { tasks, completeTaskAsUser, listMyTasks, listCreatedByMeTasks } = useTasks();
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
+    const [pendingCompleteId, setPendingCompleteId] = useState<string | null>(null);
+    const [completing, setCompleting] = useState(false);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
     const [nowMs, setNowMs] = useState(Date.now());
     StatusBar.setBarStyle("dark-content");
@@ -157,55 +164,15 @@ export default function CalendarScreen() {
         );
     };
 
-    const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
-        if (!dueDate) return null;
-        const timePart = dueTime && dueTime.trim().length > 0 ? dueTime : "23:59";
-
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-            const parsedIso = new Date(`${dueDate}T${timePart}`);
-            if (!isNaN(parsedIso.getTime())) return parsedIso;
-        }
-
-        const nativeParsed = new Date(`${dueDate} ${timePart}`);
-        if (!isNaN(nativeParsed.getTime())) return nativeParsed;
-
-        const parts = dueDate.split(/[\/]/).map((p) => parseInt(p, 10));
-        if (parts.length === 3) {
-            const [month, day, year] = parts;
-            if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
-                const [hoursRaw, minutesRaw] = timePart
-                    .replace(/\s?(AM|PM)$/i, "")
-                    .split(":")
-                    .map((p) => parseInt(p, 10));
-                const hasPM = /PM$/i.test(timePart);
-                const hours = Number.isNaN(hoursRaw)
-                    ? 23
-                    : Math.min(23, hasPM && hoursRaw < 12 ? hoursRaw + 12 : hoursRaw);
-                const minutes = Number.isNaN(minutesRaw) ? 59 : Math.min(59, minutesRaw);
-                const manual = new Date(year, month - 1, day, hours, minutes);
-                if (!isNaN(manual.getTime())) return manual;
-            }
-        }
-
-        return null;
-    };
-
-    const computeComputedStatus = (taskStatus: string, due: Date | null) => {
-        if (taskStatus === "pending" && due && due.getTime() < nowMs) {
-            return "missing" as const;
-        }
-        return taskStatus as "pending" | "completed" | "missing";
-    };
-
     const decoratedTasks = useMemo(() => {
         return tasks.map((task) => {
-            const due = parseDueDateTime(task.dueDate, task.dueTime);
-            const computedStatus = computeComputedStatus(task.status, due);
+            const due = parseLocalDueDateTime(task.dueDate, task.dueTime);
+            const computedStatus = computeComputedTaskStatus(task.status, due, nowMs);
             return { ...task, computedStatus };
         });
     }, [tasks, nowMs]);
 
-    // This is so it filter tasks based on selected date
+    // Show all tasks for the selected date, regardless of status
     const filteredTasks = useMemo(() => {
         return decoratedTasks.filter((task) => toCalendarDateKey(task.dueDate) === selectedDate);
     }, [decoratedTasks, selectedDate]);
@@ -284,17 +251,25 @@ export default function CalendarScreen() {
                                     selectedTask={selectedTask}
                                     onSelect={setSelectedTask}
                                     title={task.title}
-                                    dependent={task.dependent}
+                                    dependent={resolveDependentDisplayName(task, dependents)}
                                     description={task.description}
                                     statusTags={
                                         <>
-                                            {statusTagByStatus[task.computedStatus]}
+                                            {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
                                             {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
                                             {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
                                         </>
                                     }
                                     dateTag={renderDateTag(task.dueDate, task.dueTime)}
-                                    onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
+                                    onPress={() =>
+                                        router.push({
+                                            pathname: "/taskDetails",
+                                            params: {
+                                                id: task.id,
+                                                careSpaceId: task.careSpaceId ? String(task.careSpaceId) : undefined,
+                                            },
+                                        })
+                                    }
                                 />
                             ))}
 
@@ -308,6 +283,38 @@ export default function CalendarScreen() {
                     </View>
                 </SafeAreaView>
             </ScrollView>
+            <CompleteTaskModal
+                visible={pendingCompleteId !== null}
+                taskTitle={tasks.find((t) => t.id === pendingCompleteId)?.title}
+                loading={completing}
+                onConfirm={async () => {
+                    if (!pendingCompleteId) {
+                        setPendingCompleteId(null);
+                        return;
+                    }
+                    setCompleting(true);
+                    try {
+                        const task = tasks.find((t) => t.id === pendingCompleteId);
+                        if (!task) throw new Error("Task not found");
+                        await completeTaskAsUser(task);
+                        await Promise.all([
+                            listMyTasks({ dateFilter: "all", status: "pending" }),
+                            listCreatedByMeTasks({ dateFilter: "all", status: "pending" }),
+                            listMyTasks({ dateFilter: "all", status: "completed" }),
+                            listCreatedByMeTasks({ dateFilter: "all", status: "completed" }),
+                        ]);
+                        setPendingCompleteId(null);
+                    } catch (error) {
+                        Alert.alert(
+                            "Complete failed",
+                            error instanceof Error ? error.message : "Unable to complete task.",
+                        );
+                    } finally {
+                        setCompleting(false);
+                    }
+                }}
+                onCancel={() => setPendingCompleteId(null)}
+            />
         </LinearGradient>
     );
 }

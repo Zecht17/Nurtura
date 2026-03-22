@@ -9,7 +9,7 @@ import { AuthProvider, useAuth } from "../context/AuthContext";
 import { CareSpacesProvider } from "../context/CareSpacesContext";
 import { ChatbotProvider } from "../context/ChatbotContext";
 import { DependentProvider } from "../context/DependentContext";
-import { TasksProvider, useTasks } from "../context/TasksContext";
+import { TasksProvider, useTasks } from "../context/tasksContext";
 import { UserProvider } from "../context/UserContext";
 
 function RouteGuard({ children }: { children: React.ReactNode }) {
@@ -161,8 +161,26 @@ function ReminderMounts() {
 
   const parseDate = (value?: string) => {
     if (!value) return null;
-    const parsed = new Date(value);
-    return isNaN(parsed.getTime()) ? null : parsed;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const parsedIso = new Date(`${value}T00:00:00`);
+      if (!isNaN(parsedIso.getTime())) return parsedIso;
+    }
+
+    if (/^\d{4}\/\d{2}\/\d{2}$/.test(value)) {
+      const [year, month, day] = value.split("/").map((part) => parseInt(part, 10));
+      const parsedSlash = new Date(year, month - 1, day);
+      if (!isNaN(parsedSlash.getTime())) return parsedSlash;
+    }
+
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) {
+      const [month, day, year] = value.split("/").map((part) => parseInt(part, 10));
+      const parsedUs = new Date(year, month - 1, day);
+      if (!isNaN(parsedUs.getTime())) return parsedUs;
+    }
+
+    const parsedNative = new Date(value);
+    return isNaN(parsedNative.getTime()) ? null : parsedNative;
   };
 
   const parseTime = (value?: string) => {

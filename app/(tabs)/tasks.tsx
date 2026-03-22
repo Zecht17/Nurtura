@@ -1,8 +1,10 @@
 import AddTaskButton from "@/components/buttons/addTask";
 import EditableTaskCard from "@/components/cards/editableTaskCard";
+import NoCompletedTask from "@/components/cards/noCompletedTask";
+import NoMissingTask from "@/components/cards/noMissingTask";
 import NoPendingTask from "@/components/cards/noPendingTask";
+import CompleteTaskModal from "@/components/modals/CompleteTaskModal";
 import DeleteTaskModal from "@/components/modals/DeleteTaskModal";
-import DateStatus from "@/components/tags/date/dateStatus";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
@@ -12,13 +14,19 @@ import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
-import { useTasks } from "@/context/TasksContext";
+import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
+import { resolveTaskCareSpaceId } from "@/utils/resolveTaskCareSpaceId";
+import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
+import { useCareSpaces } from "@/context/CareSpacesContext";
+import { useDependents } from "@/context/DependentContext";
+import { useTasks } from "@/context/tasksContext";
+import { useUser } from "@/context/UserContext";
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, TextInput as RNTextInput, ScrollView, StatusBar, StyleSheet, Text, UIManager, View } from "react-native";
+import { Alert, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, TextInput as RNTextInput, ScrollView, StatusBar, StyleSheet, Text, UIManager, View } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -28,16 +36,26 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export default function TaskScreen() {
     const router = useRouter();
-    // For the dropdowns
-    const [range, setRange] = useState("All Dependents");
-    const [range2, setRange2] = useState("All Categories");
+    const { careSpaces } = useCareSpaces();
+    const { dependents } = useDependents();
+    const { profileData } = useUser();
+    const {
+        tasks,
+        listTasksByMember,
+        listMyTasks,
+        listCreatedByMeTasks,
+        deleteTaskApi,
+        completeTaskAsUser,
+    } = useTasks();
+
+    const [selectedAssignee, setSelectedAssignee] = useState<"myTasks" | "createdByMe" | number>("myTasks");
+    const [selectedCareSpaceId, setSelectedCareSpaceId] = useState<number | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [menuVisible1, setMenuVisible1] = useState(false);
     const [menuVisible2, setMenuVisible2] = useState(false);
     const [selectedStatus, setSelectedStatus] = useState("pending");
-    const [selectedTask, setSelectedTask] = useState<string | null>(null);
-    // For the task card when created
-    const { tasks, removeTask } = useTasks();
+    const [loadingTasks, setLoadingTasks] = useState(false);
+    const [taskLoadError, setTaskLoadError] = useState<string | null>(null);
     // For the date and time
     const [nowMs, setNowMs] = useState(Date.now());
     useEffect(() => {
@@ -45,59 +63,163 @@ export default function TaskScreen() {
         return () => clearInterval(id);
     }, []);
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-    // For the task card shows all the status, priority, and recurring pattern of the task
-    const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
-        if (!dueDate) return null;
-        const timePart = dueTime && dueTime.trim().length > 0 ? dueTime : "23:59";
+    const [pendingCompleteId, setPendingCompleteId] = useState<string | null>(null);
+    const [completing, setCompleting] = useState(false);
 
-        // Try ISO first (yyyy-mm-dd)
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-            const parsedIso = new Date(`${dueDate}T${timePart}`);
-            if (!isNaN(parsedIso.getTime())) return parsedIso;
-        }
+    const resolveCareSpaceId = (id: string) => {
+        const match = id.match(/(\d+)$/);
+        return match ? Number(match[1]) : null;
+    };
 
-        // Try JS native parse
-        const nativeParsed = new Date(`${dueDate} ${timePart}`);
-        if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+    const careSpaceOptions = careSpaces
+        .map((careSpace) => {
+            const numericId = resolveCareSpaceId(careSpace.id);
+            if (!numericId) return null;
 
-        // Fallback: parse common locale format mm/dd/yyyy
-        const parts = dueDate.split(/[\/]/).map((p) => parseInt(p, 10));
-        if (parts.length === 3) {
-            const [month, day, year] = parts;
-            if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
-                const [hours, minutes] = timePart
-                    .replace(/\s?(AM|PM)$/i, "")
-                    .split(":")
-                    .map((p) => parseInt(p, 10));
-                const hasPM = /PM$/i.test(timePart);
-                const normalizedHours = Number.isNaN(hours)
-                    ? 23
-                    : Math.min(23, hasPM && hours < 12 ? hours + 12 : hours);
-                const normalizedMinutes = Number.isNaN(minutes) ? 59 : Math.min(59, minutes);
-                const manual = new Date(year, month - 1, day, normalizedHours, normalizedMinutes);
-                if (!isNaN(manual.getTime())) return manual;
+            return {
+                id: numericId,
+                title: careSpace.title,
+            };
+        })
+        .filter((item): item is { id: number; title: string } => !!item);
+
+    const dependentOptions = dependents
+        .map((dependent) => {
+            const userId = dependent.userId ?? dependent.dependentId;
+
+            if (!userId || !Number.isInteger(userId) || userId <= 0) {
+                return null;
             }
-        }
 
-        return null;
-    };
+            return {
+                userId,
+                name: dependent.name,
+            };
+        })
+        .filter((item): item is { userId: number; name: string } => !!item);
 
-    const computeComputedStatus = (taskStatus: string, due: Date | null) => {
-        if (taskStatus === "pending" && due && due.getTime() < nowMs) {
-            return "missing" as const;
-        }
-        return taskStatus as "pending" | "completed" | "missing";
-    };
+    const selectedAssigneeLabel =
+        selectedAssignee === "myTasks"
+            ? "My tasks"
+            : selectedAssignee === "createdByMe"
+                ? "Tasks Created by Me"
+                : dependentOptions.find((option) => option.userId === selectedAssignee)?.name || "Select Dependent";
 
+    const selectedCareSpaceLabel =
+        selectedCareSpaceId === null
+            ? "All Care Spaces"
+            : careSpaceOptions.find((option) => option.id === selectedCareSpaceId)?.title || "Select Care Space";
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const statusQuery =
+            selectedStatus === "missing"
+                ? "missed"
+                : (selectedStatus as "pending" | "completed");
+
+        const loadTasks = async () => {
+            setLoadingTasks(true);
+            setTaskLoadError(null);
+
+            try {
+                if (selectedAssignee === "myTasks") {
+                    // Tasks assigned to you AND tasks you created for others (same as Home/Calendar visibility).
+                    await listMyTasks({ dateFilter: "all", status: statusQuery });
+                    await listCreatedByMeTasks({ dateFilter: "all", status: statusQuery });
+                    return;
+                }
+
+                if (selectedAssignee === "createdByMe") {
+                    await listCreatedByMeTasks({ dateFilter: "all", status: statusQuery });
+                    return;
+                }
+
+                if (!selectedCareSpaceId) {
+                    if (isMounted) {
+                        setTaskLoadError("Select a care space to load tasks for this dependent.");
+                    }
+                    return;
+                }
+
+                await listTasksByMember(selectedAssignee, selectedCareSpaceId);
+            } catch (err) {
+                if (isMounted) {
+                    setTaskLoadError((err as Error).message || "Unable to load tasks.");
+                }
+            } finally {
+                if (isMounted) {
+                    setLoadingTasks(false);
+                }
+            }
+        };
+
+        loadTasks();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [selectedAssignee, selectedCareSpaceId, selectedStatus, listMyTasks, listCreatedByMeTasks, listTasksByMember]);
     const decoratedTasks = tasks.map((task) => {
-        const due = parseDueDateTime(task.dueDate, task.dueTime);
-        const computedStatus = computeComputedStatus(task.status, due);
+        const due = parseLocalDueDateTime(task.dueDate, task.dueTime);
+        const computedStatus = computeComputedTaskStatus(task.status, due, nowMs);
         return { ...task, computedStatus };
     });
 
     StatusBar.setBarStyle("dark-content");
 
-    const filteredTasks = decoratedTasks.filter((task) => task.computedStatus === selectedStatus);
+    const currentUserId = profileData?.user_id;
+
+    const filteredTasks = decoratedTasks.filter((task) => {
+        const matchesStatus = task.computedStatus === selectedStatus;
+
+        if (!matchesStatus) {
+            return false;
+        }
+
+        if (selectedCareSpaceId != null && task.careSpaceId != null && task.careSpaceId !== selectedCareSpaceId) {
+            return false;
+        }
+
+        if (typeof currentUserId === "number" && currentUserId > 0) {
+            if (selectedAssignee === "myTasks") {
+                const iCreated =
+                    typeof task.assignedByUserId === "number" && task.assignedByUserId === currentUserId;
+                /** Local row from createTask (TasksProvider) until lists return full assignment metadata */
+                const iCreatedOptimistic = task.clientCreatedAt != null;
+                const isCreator = iCreated || iCreatedOptimistic;
+                const assignedToMe = task.assignedUserIds?.includes(currentUserId) ?? false;
+                if (task.assignedUserIds && task.assignedUserIds.length > 0) {
+                    if (!assignedToMe && !isCreator) {
+                        return false;
+                    }
+                } else if (task.assignedByUserId != null && !isCreator) {
+                    return false;
+                }
+            } else if (selectedAssignee === "createdByMe") {
+                if (task.assignedByUserId != null && task.assignedByUserId !== currentUserId) {
+                    return false;
+                }
+            } else if (typeof selectedAssignee === "number") {
+                if (task.assignedUserIds && task.assignedUserIds.length > 0) {
+                    if (!task.assignedUserIds.includes(selectedAssignee)) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if (!searchQuery.trim()) {
+            return true;
+        }
+
+        const keyword = searchQuery.trim().toLowerCase();
+        return (
+            task.title.toLowerCase().includes(keyword) ||
+            task.description.toLowerCase().includes(keyword) ||
+            task.dependent.toLowerCase().includes(keyword)
+        );
+    });
 
     const statusTagByStatus = {
         pending: <PendingStatus />,
@@ -204,7 +326,7 @@ export default function TaskScreen() {
                         />
                     </View>
 
-                    {/* Dependents and categories dropdown */}
+                    {/* Dependents and care spaces dropdown */}
                     <View style={styles.sortingContainer}>
                         <Menu
                             visible={menuVisible1}
@@ -212,7 +334,7 @@ export default function TaskScreen() {
                             anchor={
                             <Pressable onPress={() => setMenuVisible1(true)}>
                                 <TextInput
-                                value={range}
+                                value={selectedAssigneeLabel}
                                 mode="outlined"
                                 editable={false}
                                 pointerEvents="none"
@@ -225,9 +347,33 @@ export default function TaskScreen() {
                             contentStyle={styles.dropdownContent}
                             style={styles.dropdown}
                         >
-                            <Menu.Item onPress={() => { setRange("dependent1"); setMenuVisible1(false); }} title="Jirah Denisse" titleStyle={styles.dropdownItemText} />
-                            <Menu.Item onPress={() => { setRange("dependent2"); setMenuVisible1(false); }} title="Ralph Jayrell" titleStyle={styles.dropdownItemText} />
-                            <Menu.Item onPress={() => { setRange("dependent3"); setMenuVisible1(false); }} title="Cyriel Alden" titleStyle={styles.dropdownItemText} />
+                            <Menu.Item
+                                onPress={() => {
+                                    setSelectedAssignee("myTasks");
+                                    setMenuVisible1(false);
+                                }}
+                                title="My tasks"
+                                titleStyle={styles.dropdownItemText}
+                            />
+                            <Menu.Item
+                                onPress={() => {
+                                    setSelectedAssignee("createdByMe");
+                                    setMenuVisible1(false);
+                                }}
+                                title="Tasks Created by Me"
+                                titleStyle={styles.dropdownItemText}
+                            />
+                            {dependentOptions.map((option) => (
+                                <Menu.Item
+                                    key={`dep-option-${option.userId}`}
+                                    onPress={() => {
+                                        setSelectedAssignee(option.userId);
+                                        setMenuVisible1(false);
+                                    }}
+                                    title={option.name}
+                                    titleStyle={styles.dropdownItemText}
+                                />
+                            ))}
                         </Menu>
 
                         {/* Drop down 2 */}
@@ -237,7 +383,7 @@ export default function TaskScreen() {
                             anchor={
                             <Pressable onPress={() => setMenuVisible2(true)}>
                                 <TextInput
-                                value={range2}
+                                value={selectedCareSpaceLabel}
                                 mode="outlined"
                                 editable={false}
                                 pointerEvents="none"
@@ -250,9 +396,25 @@ export default function TaskScreen() {
                             contentStyle={styles.dropdownContent}
                             style={styles.dropdown2}
                         >
-                            <Menu.Item onPress={() => { setRange2("category1"); setMenuVisible2(false); }} title="Category 1" titleStyle={styles.dropdownItemText} />
-                            <Menu.Item onPress={() => { setRange2("category2"); setMenuVisible2(false); }} title="Category 2" titleStyle={styles.dropdownItemText} />
-                            <Menu.Item onPress={() => { setRange2("category3"); setMenuVisible2(false); }} title="Category 3" titleStyle={styles.dropdownItemText} />
+                            <Menu.Item
+                                onPress={() => {
+                                    setSelectedCareSpaceId(null);
+                                    setMenuVisible2(false);
+                                }}
+                                title="All Care Spaces"
+                                titleStyle={styles.dropdownItemText}
+                            />
+                            {careSpaceOptions.map((option) => (
+                                <Menu.Item
+                                    key={`care-space-${option.id}`}
+                                    onPress={() => {
+                                        setSelectedCareSpaceId(option.id);
+                                        setMenuVisible2(false);
+                                    }}
+                                    title={option.title}
+                                    titleStyle={styles.dropdownItemText}
+                                />
+                            ))}
                         </Menu>
                     </View>
                     
@@ -293,58 +455,32 @@ export default function TaskScreen() {
 
                         {/* Task Cards Display */}
                         <View style={styles.taskCardsContainer}>
-                            {selectedStatus === "pending" && filteredTasks.length === 0 && (
+                            {loadingTasks && <Text style={styles.feedbackText}>Loading tasks...</Text>}
+                            {!!taskLoadError && <Text style={styles.errorText}>{taskLoadError}</Text>}
+                            {!loadingTasks && selectedStatus === "pending" && filteredTasks.length === 0 && (
                                 <NoPendingTask />
                             )}
-                            {selectedStatus === "completed" && (
-                                <View>
-                                    <EditableTaskCard
-                                        value="eat-lunch"
-                                        selectedTask={selectedTask}
-                                        onSelect={setSelectedTask}
-                                        title="Eat Lunch"
-                                        dependent="Jirah Denisse"
-                                        description="Eat Lunch with Jirah at 12 PM"
-                                        statusTags={
-                                        <>
-                                            <CompletedStatus />
-                                            <HighPriorityStatus />
-                                            <WeeklyRecurringStatus />
-                                        </>
-                                        }
-                                        dateTag={<DateStatus />}
-                                    />
-                                </View>
+                            {!loadingTasks && selectedStatus === "completed" && filteredTasks.length === 0 && (
+                                <NoCompletedTask />
                             )}
-                            {selectedStatus === "missing" && (
-                                <View>
-                                    <EditableTaskCard
-                                        value="take-out-trash"
-                                        selectedTask={selectedTask}
-                                        onSelect={setSelectedTask}
-                                        title="Take Out Trash"
-                                        dependent="Jirah Denisse"
-                                        description="Take out the trash in the kitchen"
-                                        statusTags={
-                                        <>
-                                            <MissedStatus />
-                                            <HighPriorityStatus />
-                                            <WeeklyRecurringStatus />
-                                        </>
-                                        }
-                                        dateTag={<DateStatus />}
-                                    />
-                                </View>
+                            {!loadingTasks && selectedStatus === "missing" && filteredTasks.length === 0 && (
+                                <NoMissingTask />
                             )}
                             {/* This is for the insert function, this will display the created task */}
                             {filteredTasks.map((task) => (
                                 <EditableTaskCard
                                     key={task.id}
                                     value={task.id}
-                                    selectedTask={selectedTask}
-                                    onSelect={setSelectedTask}
+                                    selectedTask={null}
+                                    onSelect={() => {}}
+                                    isCompleted={task.computedStatus === "completed"}
+                                    onRadioPress={
+                                        task.computedStatus === "pending"
+                                            ? () => setPendingCompleteId(task.id)
+                                            : undefined
+                                    }
                                     title={task.title}
-                                    dependent={task.dependent}
+                                    dependent={resolveDependentDisplayName(task, dependents)}
                                     description={task.description}
                                     statusTags={
                                         <>
@@ -354,21 +490,95 @@ export default function TaskScreen() {
                                         </>
                                     }
                                     dateTag={renderDateTag(task.dueDate, task.dueTime)}
-                                    onEdit={() => router.push({ pathname: "/editTaskPage", params: { id: task.id } })}
-                                    onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
+                                    onEdit={() =>
+                                        router.push({
+                                            pathname: "/editTaskPage",
+                                            params: {
+                                                id: task.id,
+                                                careSpaceId: task.careSpaceId ? String(task.careSpaceId) : undefined,
+                                            },
+                                        })
+                                    }
+                                    onPress={() =>
+                                        router.push({
+                                            pathname: "/taskDetails",
+                                            params: {
+                                                id: task.id,
+                                                careSpaceId: task.careSpaceId ? String(task.careSpaceId) : undefined,
+                                            },
+                                        })
+                                    }
                                     onDelete={() => setPendingDeleteId(task.id)}
                                 />
                             ))}
+                                                <CompleteTaskModal
+                                                    visible={pendingCompleteId !== null}
+                                                    taskTitle={tasks.find((t) => t.id === pendingCompleteId)?.title}
+                                                    loading={completing}
+                                                    onConfirm={async () => {
+                                                        if (!pendingCompleteId) {
+                                                            setPendingCompleteId(null);
+                                                            return;
+                                                        }
+                                                        setCompleting(true);
+                                                        try {
+                                                            const task = tasks.find((t) => t.id === pendingCompleteId);
+                                                            if (!task) throw new Error("Task not found");
+                                                            await completeTaskAsUser(task);
+                                                            const refreshStatus =
+                                                                selectedStatus === "missing"
+                                                                    ? "missed"
+                                                                    : (selectedStatus as "pending" | "completed");
+                                                            if (selectedAssignee === "myTasks") {
+                                                                await listMyTasks({ dateFilter: "all", status: refreshStatus });
+                                                                await listCreatedByMeTasks({ dateFilter: "all", status: refreshStatus });
+                                                            } else if (selectedAssignee === "createdByMe") {
+                                                                await listCreatedByMeTasks({
+                                                                    dateFilter: "all",
+                                                                    status: selectedStatus as "pending" | "completed" | "missed",
+                                                                });
+                                                            } else if (selectedCareSpaceId) {
+                                                                await listTasksByMember(selectedAssignee, selectedCareSpaceId);
+                                                            }
+                                                            setPendingCompleteId(null);
+                                                        } catch (error) {
+                                                            Alert.alert("Complete failed", error instanceof Error ? error.message : "Unable to complete task.");
+                                                        } finally {
+                                                            setCompleting(false);
+                                                        }
+                                                    }}
+                                                    onCancel={() => setPendingCompleteId(null)}
+                                                />
                         </View>
 
                         <DeleteTaskModal
                             visible={pendingDeleteId !== null}
                             taskTitle={tasks.find((t) => t.id === pendingDeleteId)?.title}
-                            onConfirm={() => {
-                                if (pendingDeleteId) {
-                                    removeTask(pendingDeleteId);
+                            onConfirm={async () => {
+                                if (!pendingDeleteId) {
+                                    setPendingDeleteId(null);
+                                    return;
                                 }
-                                setPendingDeleteId(null);
+
+                                const taskToDelete = tasks.find((t) => t.id === pendingDeleteId);
+                                const numericTaskId = Number.parseInt(pendingDeleteId, 10);
+                                const numericCareSpaceId = resolveTaskCareSpaceId(taskToDelete, {
+                                    filterCareSpaceId: selectedCareSpaceId,
+                                });
+                                if (!Number.isInteger(numericTaskId) || numericTaskId <= 0) {
+                                    Alert.alert("Delete failed", "Unable to resolve task ID.");
+                                    return;
+                                }
+                                if (numericCareSpaceId === undefined) {
+                                    Alert.alert("Delete failed", "Unable to resolve care space ID for this task.");
+                                    return;
+                                }
+                                try {
+                                    await deleteTaskApi(numericTaskId, numericCareSpaceId);
+                                    setPendingDeleteId(null);
+                                } catch (error) {
+                                    Alert.alert("Delete failed", error instanceof Error ? error.message : "Unable to delete task.");
+                                }
                             }}
                             onCancel={() => setPendingDeleteId(null)}
                         />
@@ -565,6 +775,18 @@ export const styles = StyleSheet.create({
         fontWeight: "bold",
         marginBottom: 15,
         color: "#333",
+    },
+
+    feedbackText: {
+        color: "#374151",
+        fontSize: 14,
+        marginBottom: 8,
+    },
+
+    errorText: {
+        color: "#B91C1C",
+        fontSize: 14,
+        marginBottom: 8,
     },
 
     viewTaskDetailsContainer: {

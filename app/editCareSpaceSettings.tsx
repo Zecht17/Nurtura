@@ -13,7 +13,10 @@ import ViewerBadge from "@/components/tags/roles/viewer";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
-import { useTasks } from "@/context/TasksContext";
+import { useDependents } from "@/context/DependentContext";
+import { useTasks } from "@/context/tasksContext";
+import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
+import { resolveTaskCareSpaceId } from "@/utils/resolveTaskCareSpaceId";
 import { Feather } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
@@ -22,7 +25,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function EditCareSpaceSettings() {
@@ -31,7 +34,8 @@ export default function EditCareSpaceSettings() {
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
     const [nowMs, setNowMs] = useState(Date.now());
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-    const { tasks, removeTask } = useTasks();
+    const { dependents } = useDependents();
+    const { tasks, deleteTaskApi } = useTasks();
 
     StatusBar.setBarStyle("dark-content");
 
@@ -313,7 +317,7 @@ export default function EditCareSpaceSettings() {
                                             selectedTask={selectedTask}
                                             onSelect={setSelectedTask}
                                             title={task.title}
-                                            dependent={task.dependent}
+                                            dependent={resolveDependentDisplayName(task, dependents)}
                                             description={task.description}
                                             statusTags={
                                                 <>
@@ -323,8 +327,24 @@ export default function EditCareSpaceSettings() {
                                                 </>
                                             }
                                             dateTag={renderDateTag(task.dueDate, task.dueTime)}
-                                            onEdit={() => router.push({ pathname: "/editTaskPage", params: { id: task.id } })}
-                                            onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
+                                            onEdit={() =>
+                                                router.push({
+                                                    pathname: "/editTaskPage",
+                                                    params: {
+                                                        id: task.id,
+                                                        careSpaceId: task.careSpaceId ? String(task.careSpaceId) : undefined,
+                                                    },
+                                                })
+                                            }
+                                            onPress={() =>
+                                                router.push({
+                                                    pathname: "/taskDetails",
+                                                    params: {
+                                                        id: task.id,
+                                                        careSpaceId: task.careSpaceId ? String(task.careSpaceId) : undefined,
+                                                    },
+                                                })
+                                            }
                                             onDelete={() => setPendingDeleteId(task.id)}
                                         />
                                     ))}
@@ -332,11 +352,32 @@ export default function EditCareSpaceSettings() {
                                     <DeleteTaskModal
                                         visible={pendingDeleteId !== null}
                                         taskTitle={tasks.find((taskItem) => taskItem.id === pendingDeleteId)?.title}
-                                        onConfirm={() => {
-                                            if (pendingDeleteId) {
-                                                removeTask(pendingDeleteId);
+                                        onConfirm={async () => {
+                                            if (!pendingDeleteId) {
+                                                setPendingDeleteId(null);
+                                                return;
                                             }
-                                            setPendingDeleteId(null);
+
+                                            const taskToDelete = tasks.find((taskItem) => taskItem.id === pendingDeleteId);
+                                            const numericTaskId = Number.parseInt(pendingDeleteId, 10);
+                                            const numericCareSpaceId = resolveTaskCareSpaceId(taskToDelete);
+
+                                            if (!Number.isInteger(numericTaskId) || numericTaskId <= 0) {
+                                                Alert.alert("Delete failed", "Unable to resolve task ID.");
+                                                return;
+                                            }
+
+                                            if (numericCareSpaceId === undefined) {
+                                                Alert.alert("Delete failed", "Unable to resolve care space ID for this task.");
+                                                return;
+                                            }
+
+                                            try {
+                                                await deleteTaskApi(numericTaskId, numericCareSpaceId);
+                                                setPendingDeleteId(null);
+                                            } catch (error) {
+                                                Alert.alert("Delete failed", error instanceof Error ? error.message : "Unable to delete task.");
+                                            }
                                         }}
                                         onCancel={() => setPendingDeleteId(null)}
                                     />

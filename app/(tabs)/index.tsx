@@ -1,3 +1,6 @@
+import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
+import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
+import CompleteTaskModal from "@/components/modals/CompleteTaskModal";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
 import MonthlyRecurringStatus from "@/components/tags/recurring/monthly";
@@ -5,11 +8,12 @@ import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import { useAuth } from "@/context/AuthContext";
-import { useTasks } from "@/context/TasksContext";
+import { useDependents } from "@/context/DependentContext";
+import { useTasks } from "@/context/tasksContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View, } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View, } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AddTaskShort from "../../components/buttons/addButton";
@@ -24,14 +28,49 @@ import HighPriorityStatus from "../../components/tags/priority/highPriority";
 import DailyRecurringStatus from "../../components/tags/recurring/daily";
 import PendingStatus from "../../components/tags/status/pending";
 
+type TaskRange = "Today" | "This Week" | "This Month";
+
+/** Monday 00:00:00 — Sunday 23:59:59.999 in local time, for the week containing `reference`. */
+function getWeekRange(reference: Date): { start: Date; end: Date } {
+  const start = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
+  const day = start.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + mondayOffset);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function isDueInSelectedRange(due: Date | null, range: TaskRange, now: Date): boolean {
+  if (!due) return false;
+  if (range === "Today") {
+    return (
+      due.getFullYear() === now.getFullYear() &&
+      due.getMonth() === now.getMonth() &&
+      due.getDate() === now.getDate()
+    );
+  }
+  if (range === "This Week") {
+    const { start, end } = getWeekRange(now);
+    const t = due.getTime();
+    return t >= start.getTime() && t <= end.getTime();
+  }
+  return due.getFullYear() === now.getFullYear() && due.getMonth() === now.getMonth();
+}
+
 export default function Index() {
   const { user } = useAuth(); // TODO: Get from user context or auth
 
-  const [range, setRange] = useState("Today");
+  const [range, setRange] = useState<TaskRange>("Today");
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [pendingCompleteId, setPendingCompleteId] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
-  const { tasks } = useTasks();
+  const { dependents } = useDependents();
+  const { tasks, completeTaskAsUser, listMyTasks, listCreatedByMeTasks } = useTasks();
   StatusBar.setBarStyle("dark-content");
 
   useEffect(() => {
@@ -58,51 +97,37 @@ export default function Index() {
     Low: <LowPriorityStatus />,
   } as const;
 
-  const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
-    if (!dueDate) return null;
-    const timePart = dueTime && dueTime.trim().length > 0 ? dueTime : "23:59";
+  const filteredAndSortedTasks = useMemo(() => {
+    const now = new Date(nowMs);
+    const decorated = tasks.map((task) => {
+      const due = parseLocalDueDateTime(task.dueDate, task.dueTime);
+      const computedStatus = computeComputedTaskStatus(task.status, due, nowMs);
+      return { ...task, computedStatus };
+    });
 
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-      const parsedIso = new Date(`${dueDate}T${timePart}`);
-      if (!isNaN(parsedIso.getTime())) return parsedIso;
-    }
+    const inRange = decorated.filter((task) => {
+      const due = parseLocalDueDateTime(task.dueDate, task.dueTime);
+      return isDueInSelectedRange(due, range, now);
+    });
 
-    const nativeParsed = new Date(`${dueDate} ${timePart}`);
-    if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+    inRange.sort((a, b) => {
+      const ta = parseLocalDueDateTime(a.dueDate, a.dueTime);
+      const tb = parseLocalDueDateTime(b.dueDate, b.dueTime);
+      if (!ta && !tb) return 0;
+      if (!ta) return 1;
+      if (!tb) return -1;
+      return ta.getTime() - tb.getTime();
+    });
 
-    const parts = dueDate.split(/[\/]/).map((p) => parseInt(p, 10));
-    if (parts.length === 3) {
-      const [month, day, year] = parts;
-      if (!Number.isNaN(month) && !Number.isNaN(day) && !Number.isNaN(year)) {
-        const [hoursRaw, minutesRaw] = timePart
-          .replace(/\s?(AM|PM)$/i, "")
-          .split(":")
-          .map((p) => parseInt(p, 10));
-        const hasPM = /PM$/i.test(timePart);
-        const hours = Number.isNaN(hoursRaw)
-          ? 23
-          : Math.min(23, hasPM && hoursRaw < 12 ? hoursRaw + 12 : hoursRaw);
-        const minutes = Number.isNaN(minutesRaw) ? 59 : Math.min(59, minutesRaw);
-        const manual = new Date(year, month - 1, day, hours, minutes);
-        if (!isNaN(manual.getTime())) return manual;
-      }
-    }
+    return inRange;
+  }, [tasks, nowMs, range]);
 
-    return null;
-  };
-
-  const computeComputedStatus = (taskStatus: string, due: Date | null) => {
-    if (taskStatus === "pending" && due && due.getTime() < nowMs) {
-      return "missing" as const;
-    }
-    return taskStatus as "pending" | "completed" | "missing";
-  };
-
-  const decoratedTasks = tasks.map((task) => {
-    const due = parseDueDateTime(task.dueDate, task.dueTime);
-    const computedStatus = computeComputedStatus(task.status, due);
-    return { ...task, computedStatus };
-  });
+  const emptyRangeMessage =
+    range === "Today"
+      ? "No tasks due today."
+      : range === "This Week"
+        ? "No tasks due this week."
+        : "No tasks due this month.";
 
   const renderDateTag = (dueDate?: string, dueTime?: string) => {
     if (!dueDate && !dueTime) return null;
@@ -196,12 +221,13 @@ export default function Index() {
           {/* This is for the  Task row, dropdown, and add button */}
           <View style={styles.taskOptions}>
             <Text style={styles.taskOptionsText}>Tasks</Text>
-            <View style={styles.taskOptionButtons}>
+            <View style={styles.tasksHeaderRight}>
               <Menu
                 visible={menuVisible}
                 onDismiss={() => setMenuVisible(false)}
+                anchorPosition="bottom"
                 anchor={
-                  <Pressable onPress={() => setMenuVisible(true)}>
+                  <Pressable onPress={() => setMenuVisible(true)} style={styles.rangeMenuAnchor}>
                     <TextInput
                       value={range}
                       mode="outlined"
@@ -210,35 +236,43 @@ export default function Index() {
                       right={<TextInput.Icon icon="menu-down" />}
                       outlineStyle={{ borderRadius: 16, borderWidth: 0.1 }}
                       style={styles.inputField}
+                      contentStyle={styles.inputFieldContent}
                     />
                   </Pressable>
                 }
                 contentStyle={styles.dropdownContent}
-                style={styles.dropdown}
+                style={styles.dropdownMenuWrapper}
               >
                 <Menu.Item onPress={() => { setRange("Today"); setMenuVisible(false); }} title="Today" titleStyle={styles.dropdownItemText} />
-                <Menu.Item onPress={() => { setRange("Week"); setMenuVisible(false); }} title="This Week" titleStyle={styles.dropdownItemText} />
-                <Menu.Item onPress={() => { setRange("Month"); setMenuVisible(false); }} title="This Month" titleStyle={styles.dropdownItemText} />
+                <Menu.Item onPress={() => { setRange("This Week"); setMenuVisible(false); }} title="This Week" titleStyle={styles.dropdownItemText} />
+                <Menu.Item onPress={() => { setRange("This Month"); setMenuVisible(false); }} title="This Month" titleStyle={styles.dropdownItemText} />
               </Menu>
-              
               <AddTaskShort />
-
             </View>
           </View>
           
           {/* This is the Task Card */}
           <View style={styles.taskCardContainer}>
-            {decoratedTasks.length === 0 ? (
+            {tasks.length === 0 ? (
               <NoPendingTask />
+            ) : filteredAndSortedTasks.length === 0 ? (
+              <NoPendingTask
+                title={emptyRangeMessage}
+                subtitle="Try another range or add a task with a due date."
+              />
             ) : (
-              decoratedTasks.map((task) => (
+              filteredAndSortedTasks.map((task) => (
                 <TaskCard
                   key={task.id}
                   value={task.id}
                   selectedTask={selectedTask}
                   onSelect={setSelectedTask}
+                  isCompleted={task.computedStatus === "completed"}
+                  onRadioPress={
+                    task.computedStatus === "pending" ? () => setPendingCompleteId(task.id) : undefined
+                  }
                   title={task.title}
-                  dependent={task.dependent}
+                  dependent={resolveDependentDisplayName(task, dependents)}
                   description={task.description}
                   statusTags={
                     <>
@@ -248,7 +282,15 @@ export default function Index() {
                     </>
                   }
                   dateTag={renderDateTag(task.dueDate, task.dueTime)}
-                  onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/taskDetails",
+                      params: {
+                        id: task.id,
+                        careSpaceId: task.careSpaceId ? String(task.careSpaceId) : undefined,
+                      },
+                    })
+                  }
                 />
               ))
             )}
@@ -271,6 +313,35 @@ export default function Index() {
         </View>
       </SafeAreaView>
     </ScrollView>
+    <CompleteTaskModal
+      visible={pendingCompleteId !== null}
+      taskTitle={tasks.find((t) => t.id === pendingCompleteId)?.title}
+      loading={completing}
+      onConfirm={async () => {
+        if (!pendingCompleteId) {
+          setPendingCompleteId(null);
+          return;
+        }
+        setCompleting(true);
+        try {
+          const task = tasks.find((t) => t.id === pendingCompleteId);
+          if (!task) throw new Error("Task not found");
+          await completeTaskAsUser(task);
+          await Promise.all([
+            listMyTasks({ dateFilter: "all", status: "pending" }),
+            listCreatedByMeTasks({ dateFilter: "all", status: "pending" }),
+            listMyTasks({ dateFilter: "all", status: "completed" }),
+            listCreatedByMeTasks({ dateFilter: "all", status: "completed" }),
+          ]);
+          setPendingCompleteId(null);
+        } catch (error) {
+          Alert.alert("Complete failed", error instanceof Error ? error.message : "Unable to complete task.");
+        } finally {
+          setCompleting(false);
+        }
+      }}
+      onCancel={() => setPendingCompleteId(null)}
+    />
     </LinearGradient>
   );
 }
@@ -325,29 +396,43 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     padding: 20,
+    gap: 12,
+  },
+
+  tasksHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 0,
+    gap: 8,
   },
 
   taskOptionsText: {
+    flexShrink: 0,
     fontWeight: "bold",
     fontSize: 24,
     color: "#000000",
   },
 
   inputField: {
-    width: 100,
-    height: 35,
+    minWidth: 120,
+    maxWidth: 200,
+    height: 40,
     backgroundColor: "#ffffff",
+    fontSize: 14,
   },
 
-  dropdown: {
-    padding: 12,
-    borderRadius: 16,
-    width: "35%",
-    marginTop: 30,
-    marginHorizontal: -20,
+  inputFieldContent: {
+    paddingVertical: 4,
+    fontSize: 14,
+  },
+
+  /** Menu root: no flex grow — keeps pill next to "Tasks" instead of stretching across the row */
+  dropdownMenuWrapper: {
+    alignSelf: "center",
   },
 
   dropdownContent: {
+    paddingTop: 10,
     backgroundColor: "#ffffff",
     borderRadius: 12,
   },
@@ -356,11 +441,8 @@ export const styles = StyleSheet.create({
     color: "#111827",
   },
 
-  taskOptionButtons: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+  rangeMenuAnchor: {
+    flexShrink: 0,
   },
 
   taskCardContainer: {

@@ -2,30 +2,44 @@ import Feather from "@expo/vector-icons/Feather";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Checkbox, Menu, Switch, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomDatePickerModal from "../components/modals/CustomDatePickerModal";
 import CustomTimePickerModal from "../components/modals/CustomTimePickerModal";
-import { Task, useTasks } from "../context/TasksContext";
+import { useCareSpaces } from "../context/CareSpacesContext";
+import { useDependents } from "../context/DependentContext";
+import { Task, useTasks } from "../context/tasksContext";
 
 export default function EditTaskScreen() {
     const router = useRouter();
-    const { id } = useLocalSearchParams<{ id?: string }>();
-    const { tasks, updateTask } = useTasks();
+    const { id, careSpaceId } = useLocalSearchParams<{ id?: string; careSpaceId?: string }>();
+    const { tasks, updateTaskApi } = useTasks();
+    const { careSpaces } = useCareSpaces();
+    const { dependents } = useDependents();
     StatusBar.setBarStyle("dark-content");
 
     const task = useMemo(() => tasks.find((t) => t.id === id), [tasks, id]);
 
+    const resolveCareSpaceNumericId = (careSpaceIdStr: string) => {
+        const match = careSpaceIdStr.match(/(\d+)$/);
+        return match ? Number.parseInt(match[1], 10) : Number.parseInt(careSpaceIdStr.replace("care-space-", ""), 10);
+    };
+
+    const selectableDependents = dependents.filter((dependent) => {
+        const resolvedUserId = dependent.userId ?? dependent.dependentId;
+        return typeof resolvedUserId === "number" && resolvedUserId > 0;
+    });
+
     const [menuVisible1, setMenuVisible1] = useState(false);
     const [menuVisible2, setMenuVisible2] = useState(false);
-    const [menuVisible, setMenuVisible] = useState(false);
     const [priorityMenuVisible, setPriorityMenuVisible] = useState(false);
     const [recurringPatternMenuVisible, setRecurringPatternMenuVisible] = useState(false);
 
     const [careSpaceType, setCareSpace] = useState("Select Care Space");
+    const [selectedCareSpaceId, setSelectedCareSpaceId] = useState<number | null>(null);
     const [dependentType, setDependent] = useState("Select Dependent");
-    const [category, setCategory] = useState("Select Category");
+    const [selectedDependentUserId, setSelectedDependentUserId] = useState<number | null>(null);
     const [priority, setPriority] = useState("Select Priority");
     const [recurringPattern, setRecurringPattern] = useState("Select Recurring Pattern");
     const [title, setTitle] = useState("");
@@ -34,12 +48,44 @@ export default function EditTaskScreen() {
     const [isRecurring, setIsRecurring] = useState(false);
     const [isReminderEnabled, setIsReminderEnabled] = useState(false);
 
+    const formatDateYMD = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
     const [dueDate, setDueDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
-    const [dateInputValue, setDateInputValue] = useState(new Date().toLocaleDateString());
+    const [dateInputValue, setDateInputValue] = useState(formatDateYMD(new Date()));
     const [dueTime, setDueTime] = useState(new Date());
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [timeInputValue, setTimeInputValue] = useState(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }));
+    const [savingTask, setSavingTask] = useState(false);
+
+    const parseExistingDate = (taskToParse: Task) => {
+        if (!taskToParse.dueDate) return new Date();
+        const d = taskToParse.dueDate.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+            const [y, m, day] = d.split("-").map((p) => parseInt(p, 10));
+            const local = new Date(y, m - 1, day, 12, 0, 0, 0);
+            return isNaN(local.getTime()) ? new Date() : local;
+        }
+        const combined = [taskToParse.dueDate, taskToParse.dueTime].filter(Boolean).join(" ");
+        const parsed = new Date(combined);
+        return isNaN(parsed.getTime()) ? new Date() : parsed;
+    };
+
+    const parseExistingTime = (taskToParse: Task, fallbackDate: Date) => {
+        if (!taskToParse.dueTime) return fallbackDate;
+        const d = taskToParse.dueDate?.trim() ?? "";
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+            const withSpace = new Date(`${d} ${taskToParse.dueTime}`);
+            if (!isNaN(withSpace.getTime())) return withSpace;
+        }
+        const parsed = new Date(`${d} ${taskToParse.dueTime}`);
+        return isNaN(parsed.getTime()) ? fallbackDate : parsed;
+    };
 
     useEffect(() => {
         if (!task) return;
@@ -49,35 +95,47 @@ export default function EditTaskScreen() {
 
         setTitle(task.title || "");
         setDescription(task.description || "");
-        setDependent(task.dependent || "Select Dependent");
-        setCategory(task.category || "Select Category");
         setPriority(task.priority || "Select Priority");
         setRecurringPattern(task.recurringPattern || "Select Recurring Pattern");
-        setIsRecurring(Boolean(task.recurringPattern));
+        setIsRecurring(Boolean(task.recurringPattern && task.recurringPattern !== "Select Recurring Pattern"));
         setIsReminderEnabled(Boolean(task.reminderEnabled));
 
+        const allDepsLabel = task.dependent?.trim().toLowerCase() === "all dependents";
+        if (allDepsLabel) {
+            setApplyToAll(true);
+            setDependent("All Dependents");
+            setSelectedDependentUserId(null);
+        } else {
+            setApplyToAll(false);
+            setDependent(task.dependent || "Select Dependent");
+            const uid = task.assignedUserIds?.[0];
+            if (typeof uid === "number" && uid > 0) {
+                const match = selectableDependents.find((dep) => (dep.userId ?? dep.dependentId) === uid);
+                setSelectedDependentUserId(uid);
+                if (match) setDependent(match.name);
+            } else {
+                setSelectedDependentUserId(null);
+            }
+        }
+
+        if (typeof task.careSpaceId === "number" && task.careSpaceId > 0) {
+            setSelectedCareSpaceId(task.careSpaceId);
+            const match = careSpaces.find((cs) => resolveCareSpaceNumericId(cs.id) === task.careSpaceId);
+            setCareSpace(match?.title ?? "Select Care Space");
+        } else {
+            setSelectedCareSpaceId(null);
+            setCareSpace("Select Care Space");
+        }
+
         setDueDate(parsedDate);
-        setDateInputValue(parsedDate.toLocaleDateString());
+        setDateInputValue(formatDateYMD(parsedDate));
         setDueTime(parsedTime);
         setTimeInputValue(parsedTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }));
-    }, [task]);
-
-    const parseExistingDate = (taskToParse: Task) => {
-        if (!taskToParse.dueDate) return new Date();
-        const combined = [taskToParse.dueDate, taskToParse.dueTime].filter(Boolean).join(" ");
-        const parsed = new Date(combined);
-        return isNaN(parsed.getTime()) ? new Date() : parsed;
-    };
-
-    const parseExistingTime = (taskToParse: Task, fallbackDate: Date) => {
-        if (!taskToParse.dueTime) return fallbackDate;
-        const parsed = new Date(`${taskToParse.dueDate ?? ""} ${taskToParse.dueTime}`);
-        return isNaN(parsed.getTime()) ? fallbackDate : parsed;
-    };
+    }, [task, careSpaces, dependents]);
 
     const handleDateChange = (date: Date) => {
         setDueDate(date);
-        setDateInputValue(date.toLocaleDateString());
+        setDateInputValue(formatDateYMD(date));
     };
 
     const handleCloseDatePicker = () => {
@@ -94,19 +152,33 @@ export default function EditTaskScreen() {
     };
 
     const handleManualDateInput = (text: string) => {
-        setDateInputValue(text);
-        const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/;
-        const match = text.match(dateRegex);
-        if (match) {
-            const [, monthStr, dayStr, yearStr] = match;
-            const month = parseInt(monthStr, 10);
-            const day = parseInt(dayStr, 10);
-            const year = parseInt(yearStr, 10);
+        const digits = text.replace(/\D/g, "").slice(0, 8);
+        let formatted = digits;
+        if (digits.length > 4) {
+            formatted = `${digits.slice(0, 4)}/${digits.slice(4)}`;
+        }
+        if (digits.length > 6) {
+            formatted = `${digits.slice(0, 4)}/${digits.slice(4, 6)}/${digits.slice(6)}`;
+        }
+        setDateInputValue(formatted);
 
-            if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
-                const parsedDate = new Date(year, month - 1, day);
-                setDueDate(parsedDate);
-            }
+        const match = formatted.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+        if (!match) {
+            return;
+        }
+
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10);
+        const day = parseInt(match[3], 10);
+        const parsedDate = new Date(year, month - 1, day);
+
+        if (
+            !isNaN(parsedDate.getTime()) &&
+            parsedDate.getFullYear() === year &&
+            parsedDate.getMonth() === month - 1 &&
+            parsedDate.getDate() === day
+        ) {
+            setDueDate(parsedDate);
         }
     };
 
@@ -130,34 +202,119 @@ export default function EditTaskScreen() {
         }
     };
 
+    const isInPast = () => {
+        const now = new Date();
+        const datePart = dueDate;
+        const timePart = dueTime;
+        if (!datePart) return false;
+        const combined = new Date(datePart);
+        combined.setHours(timePart.getHours(), timePart.getMinutes(), 0, 0);
+        return combined.getTime() < now.getTime();
+    };
+
+    const toIsoFromDateTime = (date: Date, time: Date) => {
+        const merged = new Date(date);
+        merged.setHours(time.getHours(), time.getMinutes(), 0, 0);
+        return merged.toISOString();
+    };
+
     const isFormValid = Boolean(
         title.trim() &&
-        dependentType !== "Select Dependent" &&
-        category !== "Select Category" &&
+        selectedCareSpaceId &&
+        (applyToAll ? selectableDependents.length > 0 : selectedDependentUserId) &&
         priority !== "Select Priority" &&
-        dateInputValue.trim()
+        dateInputValue.trim() &&
+        !isInPast(),
     );
 
     const handleUpdateTask = () => {
-        if (!task || !id || !isFormValid) return;
+        if (!task || !id || !isFormValid || savingTask) return;
+
+        const numericTaskId = Number.parseInt(String(id), 10);
+        if (!Number.isInteger(numericTaskId) || numericTaskId <= 0) {
+            Alert.alert("Invalid task", "Unable to resolve task ID for update.");
+            return;
+        }
+
+        const routeCareSpaceId = Number.parseInt(String(careSpaceId || ""), 10);
+        const resolvedCareSpaceId =
+            typeof selectedCareSpaceId === "number" && selectedCareSpaceId > 0
+                ? selectedCareSpaceId
+                : Number.isInteger(routeCareSpaceId) && routeCareSpaceId > 0
+                    ? routeCareSpaceId
+                    : typeof task.careSpaceId === "number" && task.careSpaceId > 0
+                        ? task.careSpaceId
+                        : null;
+
+        if (!resolvedCareSpaceId) {
+            Alert.alert("Care space required", "Select a care space for this task.");
+            return;
+        }
 
         const recurringValue = isRecurring && recurringPattern !== "Select Recurring Pattern"
             ? recurringPattern
             : null;
 
-        updateTask(id as string, {
-            title: title.trim(),
-            dependent: dependentType,
-            description: description.trim(),
-            category,
-            priority,
-            recurringPattern: recurringValue,
-            reminderEnabled: isReminderEnabled,
-            dueDate: dueDate.toLocaleDateString(),
-            dueTime: dueTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
-        });
+        const recurrenceType = recurringValue ? recurringValue.toLowerCase() : "none";
+        const recurrenceDays =
+            recurrenceType === "daily" ? 1 : recurrenceType === "weekly" ? 7 : recurrenceType === "monthly" ? 30 : 0;
 
-        router.back();
+        const dueDateIso = toIsoFromDateTime(dueDate, dueTime);
+
+        const assignedUserIds = applyToAll
+            ? selectableDependents
+                  .map((dependent) => dependent.userId ?? dependent.dependentId)
+                  .filter((id): id is number => typeof id === "number" && id > 0)
+            : selectedDependentUserId && selectedDependentUserId > 0
+                ? [selectedDependentUserId]
+                : [];
+
+        const normalizedPriority = priority.toLowerCase() === "high"
+            ? "high"
+            : priority.toLowerCase() === "medium"
+                ? "medium"
+                : "low";
+
+        setSavingTask(true);
+
+        updateTaskApi(numericTaskId, resolvedCareSpaceId, {
+            updates: {
+                title: title.trim(),
+                description: description.trim(),
+                due_date: dueDateIso,
+                priority: normalizedPriority,
+            },
+            assigned_user_ids: assignedUserIds,
+            schedule_data: [
+                {
+                    start_time: dueDateIso,
+                    end_time: dueDateIso,
+                    recurrence_type: recurrenceType as "none" | "daily" | "weekly" | "monthly",
+                    recurrence_days: recurrenceDays,
+                },
+            ],
+            localTaskOverrides: {
+                title: title.trim(),
+                dependent: applyToAll ? "All Dependents" : dependentType,
+                description: description.trim(),
+                priority,
+                recurringPattern: recurringValue,
+                reminderEnabled: isReminderEnabled,
+                dueDate: formatDateYMD(dueDate),
+                dueTime: dueTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
+                careSpaceId: resolvedCareSpaceId,
+                assignedUserIds: assignedUserIds.length > 0 ? assignedUserIds : undefined,
+            },
+        })
+            .then(() => {
+                router.back();
+            })
+            .catch((error) => {
+                Alert.alert("Update failed", error instanceof Error ? error.message : "Unable to update task.");
+            })
+            .finally(() => {
+                setSavingTask(false);
+            });
     };
 
     if (!task) {
@@ -195,7 +352,7 @@ export default function EditTaskScreen() {
                         <View style={styles.formContainer}>
                             <View style={styles.formContent}>
                                 <Text style={styles.formTitle}>Task Details</Text>
-                                <Text style={styles.inputTitle}>Care Space (Optional)</Text>
+                                <Text style={styles.inputTitle}>Care Space *</Text>
                                 <Menu
                                     visible={menuVisible1}
                                     onDismiss={() => setMenuVisible1(false)}
@@ -216,8 +373,24 @@ export default function EditTaskScreen() {
                                     contentStyle={styles.dropdownContent}
                                     style={styles.dropdown}
                                 >
-                                    <Menu.Item onPress={() => { setCareSpace("Care Space 1"); setMenuVisible1(false); }} title="Care Space 1" titleStyle={styles.dropdownItemText} />
-                                    <Menu.Item onPress={() => { setCareSpace("Care Space 2"); setMenuVisible1(false); }} title="Care Space 2" titleStyle={styles.dropdownItemText} />
+                                    {careSpaces.map((cs) => {
+                                        const numericId = resolveCareSpaceNumericId(cs.id);
+                                        if (Number.isNaN(numericId) || numericId <= 0) {
+                                            return null;
+                                        }
+                                        return (
+                                            <Menu.Item
+                                                key={cs.id}
+                                                onPress={() => {
+                                                    setCareSpace(cs.title);
+                                                    setSelectedCareSpaceId(numericId);
+                                                    setMenuVisible1(false);
+                                                }}
+                                                title={cs.title}
+                                                titleStyle={styles.dropdownItemText}
+                                            />
+                                        );
+                                    })}
                                 </Menu>
 
                                 <Text style={styles.inputTitle}>Dependent *</Text>
@@ -241,13 +414,39 @@ export default function EditTaskScreen() {
                                     contentStyle={styles.dropdownContent}
                                     style={styles.dropdown}
                                 >
-                                    <Menu.Item onPress={() => { setDependent("Jirah Denisse"); setMenuVisible2(false); }} title="Jirah Denisse" titleStyle={styles.dropdownItemText} />
-                                    <Menu.Item onPress={() => { setDependent("Cryiel Alden"); setMenuVisible2(false); }} title="Cryiel Alden" titleStyle={styles.dropdownItemText} />
+                                    {selectableDependents.map((dependent) => {
+                                        const resolvedUserId = dependent.userId ?? dependent.dependentId;
+                                        if (typeof resolvedUserId !== "number") {
+                                            return null;
+                                        }
+                                        return (
+                                            <Menu.Item
+                                                key={dependent.id}
+                                                onPress={() => {
+                                                    setDependent(dependent.name);
+                                                    setSelectedDependentUserId(resolvedUserId);
+                                                    setMenuVisible2(false);
+                                                }}
+                                                title={dependent.name}
+                                                titleStyle={styles.dropdownItemText}
+                                            />
+                                        );
+                                    })}
                                 </Menu>
                                 <View style={styles.applyAllRadio}>
                                     <Checkbox
                                         status={applyToAll ? "checked" : "unchecked"}
-                                        onPress={() => setApplyToAll(!applyToAll)}
+                                        onPress={() => {
+                                            const nextValue = !applyToAll;
+                                            setApplyToAll(nextValue);
+                                            if (nextValue) {
+                                                setDependent("All Dependents");
+                                                setSelectedDependentUserId(null);
+                                            } else {
+                                                setDependent("Select Dependent");
+                                                setSelectedDependentUserId(null);
+                                            }
+                                        }}
                                         color="#7C6FDC"
                                     />
                                     <Text style={styles.inputSubTitle}>Apply to all dependents</Text>
@@ -281,59 +480,30 @@ export default function EditTaskScreen() {
                                     onChangeText={setDescription}
                                 />
 
-                                <View style={styles.inputRow}>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={styles.inputTitle}>Category *</Text>
-                                        <Menu
-                                            visible={menuVisible}
-                                            onDismiss={() => setMenuVisible(false)}
-                                            anchor={
-                                                <Pressable onPress={() => setMenuVisible(true)}>
-                                                    <TextInput
-                                                        value={category}
-                                                        mode="outlined"
-                                                        editable={false}
-                                                        pointerEvents="none"
-                                                        right={<TextInput.Icon icon="menu-down" />}
-                                                        outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                                        style={styles.inputField}
-                                                    />
-                                                </Pressable>
-                                            }
-                                            contentStyle={styles.dropdownContent}
-                                            style={styles.dropdown2}
-                                        >
-                                            <Menu.Item onPress={() => { setCategory("Category 1"); setMenuVisible(false); }} title="Category 1" titleStyle={styles.dropdownItemText} />
-                                            <Menu.Item onPress={() => { setCategory("Category 2"); setMenuVisible(false); }} title="Category 2" titleStyle={styles.dropdownItemText} />
-                                        </Menu>
-                                    </View>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={styles.inputTitle}>Priority *</Text>
-                                        <Menu
-                                            visible={priorityMenuVisible}
-                                            onDismiss={() => setPriorityMenuVisible(false)}
-                                            anchor={
-                                                <Pressable onPress={() => setPriorityMenuVisible(true)}>
-                                                    <TextInput
-                                                        value={priority}
-                                                        mode="outlined"
-                                                        editable={false}
-                                                        pointerEvents="none"
-                                                        right={<TextInput.Icon icon="menu-down" />}
-                                                        outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                                        style={styles.inputField}
-                                                    />
-                                                </Pressable>
-                                            }
-                                            contentStyle={styles.dropdownContent}
-                                            style={styles.dropdown2}
-                                        >
-                                            <Menu.Item onPress={() => { setPriority("Low"); setPriorityMenuVisible(false); }} title="Low" titleStyle={styles.dropdownItemText} />
-                                            <Menu.Item onPress={() => { setPriority("Medium"); setPriorityMenuVisible(false); }} title="Medium" titleStyle={styles.dropdownItemText} />
-                                            <Menu.Item onPress={() => { setPriority("High"); setPriorityMenuVisible(false); }} title="High" titleStyle={styles.dropdownItemText} />
-                                        </Menu>
-                                    </View>
-                                </View>
+                                <Text style={styles.inputTitle}>Priority *</Text>
+                                <Menu
+                                    visible={priorityMenuVisible}
+                                    onDismiss={() => setPriorityMenuVisible(false)}
+                                    anchor={
+                                        <Pressable onPress={() => setPriorityMenuVisible(true)}>
+                                            <TextInput
+                                                value={priority}
+                                                mode="outlined"
+                                                editable={false}
+                                                pointerEvents="none"
+                                                right={<TextInput.Icon icon="menu-down" />}
+                                                outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                                style={styles.inputField}
+                                            />
+                                        </Pressable>
+                                    }
+                                    contentStyle={styles.dropdownContent}
+                                    style={styles.dropdown}
+                                >
+                                    <Menu.Item onPress={() => { setPriority("Low"); setPriorityMenuVisible(false); }} title="Low" titleStyle={styles.dropdownItemText} />
+                                    <Menu.Item onPress={() => { setPriority("Medium"); setPriorityMenuVisible(false); }} title="Medium" titleStyle={styles.dropdownItemText} />
+                                    <Menu.Item onPress={() => { setPriority("High"); setPriorityMenuVisible(false); }} title="High" titleStyle={styles.dropdownItemText} />
+                                </Menu>
 
                                 <View style={styles.inputRow}>
                                     <View style={styles.inputGroup}>
@@ -342,11 +512,11 @@ export default function EditTaskScreen() {
                                             {Platform.OS !== "web" ? (
                                                 <Pressable onPress={() => setShowDatePicker(true)}>
                                                     <TextInput
-                                                        value={dueDate.toLocaleDateString()}
+                                                        value={dateInputValue}
                                                         mode="outlined"
                                                         editable={false}
                                                         pointerEvents="none"
-                                                        placeholder="MM/DD/YYYY"
+                                                        placeholder="YYYY/MM/DD"
                                                         right={<TextInput.Icon icon="calendar" />}
                                                         outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
                                                         style={styles.inputField}
@@ -358,7 +528,7 @@ export default function EditTaskScreen() {
                                                     onChangeText={handleManualDateInput}
                                                     mode="outlined"
                                                     editable
-                                                    placeholder="MM/DD/YYYY"
+                                                    placeholder="YYYY/MM/DD"
                                                     right={<TextInput.Icon icon="calendar" />}
                                                     outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
                                                     style={styles.inputField}
@@ -449,23 +619,13 @@ export default function EditTaskScreen() {
                                         style={styles.toggle}
                                     />
                                 </View>
-                                <TextInput
-                                    value={timeInputValue}
-                                    onChangeText={handleManualTimeInput}
-                                    mode="outlined"
-                                    editable
-                                    placeholder="HH:MM"
-                                    right={<TextInput.Icon icon="clock" />}
-                                    outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                    style={styles.inputField}
-                                />
 
                                 <View style={styles.buttonContainer}>
                                     <Pressable style={styles.cancelButton} onPress={() => router.back()}>
                                         <Text style={styles.cancelButtonText}>Cancel</Text>
                                     </Pressable>
-                                    <Pressable style={[styles.createButton, !isFormValid && styles.createButtonDisabled]} onPress={handleUpdateTask} disabled={!isFormValid}>
-                                        <Text style={styles.createButtonText}>Save Changes</Text>
+                                    <Pressable style={[styles.createButton, (!isFormValid || savingTask) && styles.createButtonDisabled]} onPress={handleUpdateTask} disabled={!isFormValid || savingTask}>
+                                        <Text style={styles.createButtonText}>{savingTask ? "Saving..." : "Save Changes"}</Text>
                                     </Pressable>
                                 </View>
                             </View>

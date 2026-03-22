@@ -2,32 +2,37 @@ import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Checkbox, Menu, Switch, TextInput } from 'react-native-paper';
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomDatePickerModal from '../components/modals/CustomDatePickerModal';
 import CustomTimePickerModal from '../components/modals/CustomTimePickerModal';
 import ReminderModal from "../components/modals/reminderModal";
-import { useTasks } from "../context/TasksContext";
+import { useCareSpaces } from "../context/CareSpacesContext";
+import { useDependents } from "../context/DependentContext";
+import { useTasks } from "../context/tasksContext";
 
 export default function AddTaskScreen() {
     const router = useRouter();
-    const { addTask } = useTasks();
+    const { createTask } = useTasks();
+    const { careSpaces } = useCareSpaces();
+    const { dependents } = useDependents();
     StatusBar.setBarStyle("dark-content");
     // For Dropdowns
     const [menuVisible1, setMenuVisible1] = useState(false);
     const [menuVisible2, setMenuVisible2] = useState(false);
-    const [menuVisible, setMenuVisible] = useState(false);
     const [priorityMenuVisible, setPriorityMenuVisible] = useState(false);
     const [recurringPatternMenuVisible, setRecurringPatternMenuVisible] = useState(false);
     const [careSpaceType, setCareSpace] = useState("Select Care Space");
     const [dependentType, setDependent] = useState("Select Dependent");
-    const [category, setCategory] = useState("Select Category");
+    const [selectedCareSpaceId, setSelectedCareSpaceId] = useState<number | null>(null);
+    const [selectedDependentUserId, setSelectedDependentUserId] = useState<number | null>(null);
     const [priority, setPriority] = useState("Select Priority");
     const [recurringPattern, setRecurringPattern] = useState("Select Recurring Pattern");
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [applyToAll, setApplyToAll] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     // For Switches
     const [isRecurring, setIsRecurring] = useState(false);
     const [isReminderEnabled, setIsReminderEnabled] = useState(false);
@@ -38,12 +43,17 @@ export default function AddTaskScreen() {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
-        return `${year}/${month}/${day}`;
+        return `${year}-${month}-${day}`;
     };
     const [dateInputValue, setDateInputValue] = useState(formatDateYMD(new Date()));
     const [dueTime, setDueTime] = useState(new Date());
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [timeInputValue, setTimeInputValue] = useState(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }));
+
+    const selectableDependents = dependents.filter((dependent) => {
+        const resolvedUserId = dependent.userId ?? dependent.dependentId;
+        return typeof resolvedUserId === "number" && resolvedUserId > 0;
+    });
 
     const handleDateChange = (date: Date) => {
         setDueDate(date);
@@ -128,35 +138,70 @@ export default function AddTaskScreen() {
 
     const isFormValid = Boolean(
         title.trim() &&
-        dependentType !== "Select Dependent" &&
-        category !== "Select Category" &&
+        selectedCareSpaceId &&
+        (applyToAll ? selectableDependents.length > 0 : selectedDependentUserId) &&
         priority !== "Select Priority" &&
         dateInputValue.trim() &&
         !isInPast()
     );
 
-    const handleSaveTask = () => {
+    const toIsoFromDateTime = (date: Date, time: Date) => {
+        const merged = new Date(date);
+        merged.setHours(time.getHours(), time.getMinutes(), 0, 0);
+        return merged.toISOString();
+    };
+
+    const handleSaveTask = async () => {
         if (!isFormValid) return;
 
         const recurringValue = isRecurring && recurringPattern !== "Select Recurring Pattern"
             ? recurringPattern
             : null;
 
-        addTask({
-            id: Date.now().toString(),
-            title: title.trim(),
-            dependent: dependentType,
-            description: description.trim(),
-            status: "pending",
-            dueDate: formatDateYMD(dueDate),
-            dueTime: dueTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-            category,
-            priority,
-            recurringPattern: recurringValue,
-            reminderEnabled: isReminderEnabled,
-        });
+        const recurrenceType = recurringValue ? recurringValue.toLowerCase() : "none";
+        const recurrenceDays = recurrenceType === "daily" ? 1 : recurrenceType === "weekly" ? 7 : recurrenceType === "monthly" ? 30 : 0;
+        const dueDateIso = toIsoFromDateTime(dueDate, dueTime);
 
-        router.back();
+        const assignedUserIds = applyToAll
+            ? selectableDependents
+                  .map((dependent) => dependent.userId ?? dependent.dependentId)
+                  .filter((id): id is number => typeof id === "number" && id > 0)
+            : (selectedDependentUserId ? [selectedDependentUserId] : []);
+
+        try {
+            setSubmitting(true);
+
+            await createTask({
+                careSpaceId: selectedCareSpaceId as number,
+                dependentName: applyToAll ? "All Dependents" : dependentType,
+                assignedUserIds,
+                taskData: {
+                    title: title.trim(),
+                    description: description.trim(),
+                    dueDate: formatDateYMD(dueDate),
+                    dueTime: dueTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                    dueAtIso: dueDateIso,
+                    priority,
+                    recurringPattern: recurringValue,
+                    reminderEnabled: isReminderEnabled,
+                },
+                scheduleData: [
+                    {
+                        start_time: dueDateIso,
+                        end_time: dueDateIso,
+                        recurrence_type: recurrenceType as "none" | "daily" | "weekly" | "monthly",
+                        recurrence_days: recurrenceDays,
+                    },
+                ],
+            });
+
+            router.back();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Unable to create task.";
+            Alert.alert("Create Task Failed", message);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -179,7 +224,7 @@ export default function AddTaskScreen() {
                         <View style={styles.formContainer}>
                             <View style={styles.formContent}>
                                 <Text style={styles.formTitle}>Task Details</Text>
-                                <Text style={styles.inputTitle}>Care Space (Optional)</Text>
+                                <Text style={styles.inputTitle}>Care Space *</Text>
                                 <Menu
                                     visible={menuVisible1}
                                     onDismiss={() => setMenuVisible1(false)}
@@ -201,8 +246,26 @@ export default function AddTaskScreen() {
                                     contentStyle={styles.dropdownContent}
                                     style={styles.dropdown}
                                 >
-                                    <Menu.Item onPress={() => { setCareSpace("Care Space 1"); setMenuVisible1(false); }} title="Care Space 1" titleStyle={styles.dropdownItemText} />
-                                    <Menu.Item onPress={() => { setCareSpace("Care Space 2"); setMenuVisible1(false); }} title="Care Space 2" titleStyle={styles.dropdownItemText} />
+                                    {careSpaces.map((careSpace) => {
+                                        const numericId = Number.parseInt(careSpace.id.replace('care-space-', ''), 10);
+
+                                        if (Number.isNaN(numericId)) {
+                                            return null;
+                                        }
+
+                                        return (
+                                            <Menu.Item
+                                                key={careSpace.id}
+                                                onPress={() => {
+                                                    setCareSpace(careSpace.title);
+                                                    setSelectedCareSpaceId(numericId);
+                                                    setMenuVisible1(false);
+                                                }}
+                                                title={careSpace.title}
+                                                titleStyle={styles.dropdownItemText}
+                                            />
+                                        );
+                                    })}
                                 </Menu>
 
                                 <Text style={styles.inputTitle}>Dependent *</Text>
@@ -227,13 +290,42 @@ export default function AddTaskScreen() {
                                     contentStyle={styles.dropdownContent}
                                     style={styles.dropdown}
                                 >
-                                    <Menu.Item onPress={() => { setDependent("Jirah Denisse"); setMenuVisible2(false); }} title="Jirah Denisse" titleStyle={styles.dropdownItemText} />
-                                    <Menu.Item onPress={() => { setDependent("Cryiel Alden"); setMenuVisible2(false); }} title="Cryiel Alden" titleStyle={styles.dropdownItemText} />
+                                    {selectableDependents.map((dependent) => {
+                                        const resolvedUserId = dependent.userId ?? dependent.dependentId;
+
+                                        if (typeof resolvedUserId !== "number") {
+                                            return null;
+                                        }
+
+                                        return (
+                                            <Menu.Item
+                                                key={dependent.id}
+                                                onPress={() => {
+                                                    setDependent(dependent.name);
+                                                    setSelectedDependentUserId(resolvedUserId);
+                                                    setMenuVisible2(false);
+                                                }}
+                                                title={dependent.name}
+                                                titleStyle={styles.dropdownItemText}
+                                            />
+                                        );
+                                    })}
                                 </Menu>
                                 <View style={styles.applyAllRadio}>
                                     <Checkbox
                                         status={applyToAll ? 'checked' : 'unchecked'}
-                                        onPress={() => setApplyToAll(!applyToAll)}
+                                        onPress={() => {
+                                            const nextValue = !applyToAll;
+                                            setApplyToAll(nextValue);
+
+                                            if (nextValue) {
+                                                setDependent("All Dependents");
+                                                setSelectedDependentUserId(null);
+                                            } else {
+                                                setDependent("Select Dependent");
+                                                setSelectedDependentUserId(null);
+                                            }
+                                        }}
                                         color="#7C6FDC"
                                     />
                                     <Text style={styles.inputSubTitle}>Apply to all dependents</Text>
@@ -262,60 +354,30 @@ export default function AddTaskScreen() {
                                     onChangeText={setDescription}
                                 />
 
-                                {/* Double dropdown */}
-                                <View style={styles.inputRow}>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={styles.inputTitle}>Category *</Text>
-                                        <Menu
-                                            visible={menuVisible}
-                                            onDismiss={() => setMenuVisible(false)}
-                                            anchor={
-                                            <Pressable onPress={() => setMenuVisible(true)}>
-                                                <TextInput
-                                                    value={category}
-                                                    mode="outlined"
-                                                    editable={false}
-                                                    pointerEvents="none"
-                                                    right={<TextInput.Icon icon="menu-down" />}
-                                                    outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                                    style={styles.inputField}
-                                                />
-                                            </Pressable>
-                                            }
-                                            contentStyle={styles.dropdownContent}
-                                            style={styles.dropdown2}
-                                        >
-                                            <Menu.Item onPress={() => { setCategory("Category 1"); setMenuVisible(false); }} title="Category 1" titleStyle={styles.dropdownItemText} />
-                                            <Menu.Item onPress={() => { setCategory("Category 2"); setMenuVisible(false); }} title="Category 2" titleStyle={styles.dropdownItemText} />
-                                        </Menu>
-                                    </View>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={styles.inputTitle}>Priority *</Text>
-                                        <Menu
-                                            visible={priorityMenuVisible}
-                                            onDismiss={() => setPriorityMenuVisible(false)}
-                                            anchor={
-                                            <Pressable onPress={() => setPriorityMenuVisible(true)}>
-                                                <TextInput
-                                                    value={priority}
-                                                    mode="outlined"
-                                                    editable={false}
-                                                    pointerEvents="none"
-                                                    right={<TextInput.Icon icon="menu-down" />}
-                                                    outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
-                                                    style={styles.inputField}
-                                                />
-                                            </Pressable>
-                                            }
-                                            contentStyle={styles.dropdownContent}
-                                            style={styles.dropdown2}
-                                        >
-                                            <Menu.Item onPress={() => { setPriority("Low"); setPriorityMenuVisible(false); }} title="Low" titleStyle={styles.dropdownItemText} />
-                                            <Menu.Item onPress={() => { setPriority("Medium"); setPriorityMenuVisible(false); }} title="Medium" titleStyle={styles.dropdownItemText} />
-                                            <Menu.Item onPress={() => { setPriority("High"); setPriorityMenuVisible(false); }} title="High" titleStyle={styles.dropdownItemText} />
-                                        </Menu>
-                                    </View>
-                                </View>
+                                <Text style={styles.inputTitle}>Priority *</Text>
+                                <Menu
+                                    visible={priorityMenuVisible}
+                                    onDismiss={() => setPriorityMenuVisible(false)}
+                                    anchor={
+                                    <Pressable onPress={() => setPriorityMenuVisible(true)}>
+                                        <TextInput
+                                            value={priority}
+                                            mode="outlined"
+                                            editable={false}
+                                            pointerEvents="none"
+                                            right={<TextInput.Icon icon="menu-down" />}
+                                            outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                            style={styles.inputField}
+                                        />
+                                    </Pressable>
+                                    }
+                                    contentStyle={styles.dropdownContent}
+                                    style={styles.dropdown}
+                                >
+                                    <Menu.Item onPress={() => { setPriority("Low"); setPriorityMenuVisible(false); }} title="Low" titleStyle={styles.dropdownItemText} />
+                                    <Menu.Item onPress={() => { setPriority("Medium"); setPriorityMenuVisible(false); }} title="Medium" titleStyle={styles.dropdownItemText} />
+                                    <Menu.Item onPress={() => { setPriority("High"); setPriorityMenuVisible(false); }} title="High" titleStyle={styles.dropdownItemText} />
+                                </Menu>
 
                                 {/* Date and Time */}
                                 <View style={styles.inputRow}>
@@ -470,8 +532,8 @@ export default function AddTaskScreen() {
                                     <Pressable style={styles.cancelButton} onPress={() => router.back()}>
                                         <Text style={styles.cancelButtonText}>Cancel</Text>
                                     </Pressable>
-                                    <Pressable style={[styles.createButton, !isFormValid && styles.createButtonDisabled]} onPress={handleSaveTask} disabled={!isFormValid}>
-                                        <Text style={styles.createButtonText}>Create Task</Text>
+                                    <Pressable style={[styles.createButton, (!isFormValid || submitting) && styles.createButtonDisabled]} onPress={handleSaveTask} disabled={!isFormValid || submitting}>
+                                        <Text style={styles.createButtonText}>{submitting ? "Creating..." : "Create Task"}</Text>
                                     </Pressable>
                                 </View>
                             </View>

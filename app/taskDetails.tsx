@@ -3,28 +3,95 @@ import DeleteTaskModal from "@/components/modals/DeleteTaskModal";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
-import { useTasks } from "@/context/TasksContext";
+import { useTasks } from "@/context/tasksContext";
+import { resolveTaskCareSpaceId } from "@/utils/resolveTaskCareSpaceId";
 import { Feather } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
-import { Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 
 export default function TaskDetails() {
-    const { tasks, removeTask } = useTasks();
-    const { id } = useLocalSearchParams<{ id?: string }>();
+    const { tasks, getTaskDetail, deleteTaskApi } = useTasks();
+    const { id, careSpaceId } = useLocalSearchParams<{ id?: string; careSpaceId?: string }>();
 
     StatusBar.setBarStyle("dark-content");
 
     const task = useMemo(() => {
         if (!tasks || tasks.length === 0) return undefined;
-        if (id) return tasks.find((t) => t.id === id) ?? tasks[0];
-        return tasks[0];
+        if (id) return tasks.find((t) => t.id === id);
+        return undefined;
     }, [tasks, id]);
 
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [loadingDetail, setLoadingDetail] = useState(false);
+    const [detailError, setDetailError] = useState<string | null>(null);
+    const [taskDetail, setTaskDetail] = useState<Awaited<ReturnType<typeof getTaskDetail>> | null>(null);
+
+    const numericTaskId = useMemo(() => {
+        const source = (id || task?.id || "").trim();
+        const parsed = Number.parseInt(source, 10);
+        return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    }, [id, task?.id]);
+
+    const numericCareSpaceId = useMemo(() => {
+        const resolved = resolveTaskCareSpaceId(task, { routeCareSpaceId: careSpaceId });
+        return resolved ?? null;
+    }, [careSpaceId, task]);
+
+    useEffect(() => {
+        if (!numericTaskId || !numericCareSpaceId) {
+            setTaskDetail(null);
+            return;
+        }
+
+        let active = true;
+
+        const loadDetail = async () => {
+            try {
+                setLoadingDetail(true);
+                setDetailError(null);
+                const data = await getTaskDetail(numericTaskId, numericCareSpaceId);
+
+                if (!active) {
+                    return;
+                }
+
+                setTaskDetail(data);
+            } catch (error) {
+                if (!active) {
+                    return;
+                }
+
+                setDetailError(error instanceof Error ? error.message : "Unable to fetch task detail.");
+                setTaskDetail(null);
+            } finally {
+                if (active) {
+                    setLoadingDetail(false);
+                }
+            }
+        };
+
+        loadDetail();
+
+        return () => {
+            active = false;
+        };
+    }, [numericTaskId, numericCareSpaceId, getTaskDetail]);
+
+    const displayTitle = (taskDetail?.title || task?.title || "Untitled Task").trim();
+    const displayDescription = (taskDetail?.description ?? task?.description ?? "").trim();
+    const displayPriority = (taskDetail?.priority || task?.priority || "").trim();
+
+    const dueFromDetail = taskDetail?.due_date ? new Date(taskDetail.due_date) : null;
+    const displayDueDate = dueFromDetail && !Number.isNaN(dueFromDetail.getTime())
+        ? dueFromDetail.toISOString().slice(0, 10)
+        : task?.dueDate;
+    const displayDueTime = dueFromDetail && !Number.isNaN(dueFromDetail.getTime())
+        ? dueFromDetail.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: true })
+        : task?.dueTime;
 
     const priorityTagByLevel = {
         High: <HighPriorityStatus />,
@@ -49,8 +116,8 @@ export default function TaskDetails() {
         return combined;
     };
 
-    if (!task) {
-        return null; // Screen is only shown when a task exists
+    if (!task && !taskDetail) {
+        return null;
     }
 
     return (
@@ -66,21 +133,31 @@ export default function TaskDetails() {
                             <Text style={styles.headerTitle}>Task Details</Text>
                             <Text style={styles.subHeader}>View and manage this task</Text>
                         </View>
-                        <EditTaskButton onPress={() => router.push({ pathname: "/editTaskPage", params: { id: task.id } })} />
+                        <EditTaskButton
+                            onPress={() =>
+                                router.push({
+                                    pathname: "/editTaskPage",
+                                    params: {
+                                        id: task?.id || (numericTaskId ? String(numericTaskId) : undefined),
+                                        careSpaceId: numericCareSpaceId ? String(numericCareSpaceId) : undefined,
+                                    },
+                                })
+                            }
+                        />
                     </View>
 
                     {/* This is for the card that contains the title of the task, category, and status */}
                     <View style={styles.cardPrimary}>
                         <View style={styles.titleRow}>
-                            <Text style={styles.taskTitle}>{task.title}</Text>
+                            <Text style={styles.taskTitle}>{displayTitle}</Text>
                         </View>
                         <View style={styles.pillRow}> 
-                            {task.category ? (
+                            {task?.category ? (
                                 <View style={[styles.pill, styles.neutralPill]}>
                                     <Text style={styles.pillText}>{task.category}</Text>
                                 </View>
                             ) : null}
-                            {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
+                            {displayPriority && priorityTagByLevel[displayPriority as keyof typeof priorityTagByLevel]}
                         </View>
                     </View>
                     
@@ -93,7 +170,7 @@ export default function TaskDetails() {
                                 <Ionicons name="person-outline" size={24} color="#6A5ACD" />
                                 <View style={styles.infoTextGroup}>
                                     <Text style={styles.infoLabel}>Dependent</Text>
-                                    <Text style={styles.infoValue}>{task.dependent}</Text>
+                                    <Text style={styles.infoValue}>{task?.dependent || "Not set"}</Text>
                                 </View>
                             </View>
                         </View>
@@ -103,17 +180,20 @@ export default function TaskDetails() {
                                 <Ionicons name="calendar-outline" size={24} color="#6A5ACD" />
                                 <View style={styles.infoTextGroup}>
                                     <Text style={styles.infoLabel}>Due Date & Time</Text>
-                                    <Text style={styles.infoValue}>{formatDateTime(task.dueDate, task.dueTime) || "Not set"}</Text>
+                                    <Text style={styles.infoValue}>{formatDateTime(displayDueDate, displayDueTime) || "Not set"}</Text>
                                 </View>
                             </View>
                         </View>
 
                         <View style={styles.infoBlock}>
                             <Text style={styles.infoLabel}>Description</Text>
-                            <Text style={styles.infoValue}>{task.description || "No description provided."}</Text>
+                            <Text style={styles.infoValue}>{displayDescription || "No description provided."}</Text>
                         </View>
 
-                        {task.recurringPattern ? (
+                        {loadingDetail ? <Text style={styles.infoLabel}>Loading latest task detail...</Text> : null}
+                        {detailError ? <Text style={styles.errorText}>{detailError}</Text> : null}
+
+                        {task?.recurringPattern ? (
                             <View style={[styles.infoBlock, styles.highlightBlock]}>
                                 <View style={styles.infoRow}>
                                     <Ionicons name="repeat-outline" size={24} color="#6A5ACD" />
@@ -131,7 +211,7 @@ export default function TaskDetails() {
                                 <View style={styles.infoTextGroup}>
                                     <Text style={styles.infoValue}>Reminder</Text>
                                     <Text style={styles.infoLabel}>
-                                        {task.reminderEnabled ? "15 minutes before" : "No reminder set"}
+                                        {task?.reminderEnabled ? "15 minutes before" : "No reminder set"}
                                     </Text>
                                 </View>
                             </View>
@@ -148,11 +228,20 @@ export default function TaskDetails() {
                     </View>
                     <DeleteTaskModal
                         visible={showDeleteModal}
-                        taskTitle={task.title}
-                        onConfirm={() => {
-                            removeTask(task.id);
-                            setShowDeleteModal(false);
-                            router.back();
+                        taskTitle={displayTitle}
+                        onConfirm={async () => {
+                            if (!numericTaskId || !numericCareSpaceId) {
+                                Alert.alert("Delete failed", "Unable to resolve task or care space ID.");
+                                return;
+                            }
+
+                            try {
+                                await deleteTaskApi(numericTaskId, numericCareSpaceId);
+                                setShowDeleteModal(false);
+                                router.back();
+                            } catch (error) {
+                                Alert.alert("Delete failed", error instanceof Error ? error.message : "Unable to delete task.");
+                            }
                         }}
                         onCancel={() => setShowDeleteModal(false)}
                     />
@@ -307,6 +396,10 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "600",
         color: "#111",
+    },
+    errorText: {
+        fontSize: 13,
+        color: "#D14343",
     },
     highlightBlock: {
         backgroundColor: "#f7eefe",

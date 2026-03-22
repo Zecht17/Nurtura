@@ -15,6 +15,7 @@ export default function dependentProfile() {
     const pathname = usePathname();
     const [deleteTarget, setDeleteTarget] = React.useState<Dependent | null>(null);
     const [deleteLoading, setDeleteLoading] = React.useState(false);
+    const [refreshing, setRefreshing] = React.useState(false);
 
     StatusBar.setBarStyle("dark-content");
 
@@ -25,6 +26,16 @@ export default function dependentProfile() {
 
         fetchMyDependents();
     }, [pathname, fetchMyDependents]);
+
+    const handleRefresh = React.useCallback(async () => {
+        setRefreshing(true);
+
+        try {
+            await fetchMyDependents();
+        } finally {
+            setRefreshing(false);
+        }
+    }, [fetchMyDependents]);
 
     const getAge = (birthDate: string) => {
         const match = birthDate.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
@@ -114,7 +125,7 @@ export default function dependentProfile() {
                     contentContainerStyle={dependents.scrollContent}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
-                        <RefreshControl refreshing={loadingDependents} onRefresh={fetchMyDependents} />
+                        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
                     }
                 >
                     <View style={dependents.container}>

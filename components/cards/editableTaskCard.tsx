@@ -7,6 +7,8 @@ type TaskCardProps = {
     value: string;
     selectedTask: string | null;
     onSelect: (value: string) => void;
+    isCompleted?: boolean;
+    onRadioPress?: () => void;
     title: string;
     dependent: string;
     description: string;
@@ -21,6 +23,8 @@ export default function EditableTaskCard({
     value,
     selectedTask,
     onSelect,
+    isCompleted = false,
+    onRadioPress,
     title,
     dependent,
     description,
@@ -30,7 +34,16 @@ export default function EditableTaskCard({
     onPress,
     onDelete,
 }: TaskCardProps) {
-    const isSelected = selectedTask === value;
+    const selectionHighlight = onRadioPress == null && selectedTask === value;
+    const radioFilled = isCompleted || selectionHighlight;
+
+    const handleRadioPress = () => {
+        if (onRadioPress) {
+            onRadioPress();
+        } else {
+            onSelect(value);
+        }
+    };
 
     return (
         <Pressable
@@ -38,9 +51,9 @@ export default function EditableTaskCard({
             style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
         >
             <View style={styles.radioRow}>
-                <Pressable onPress={() => onSelect(value)} style={styles.radioWrapper}>
-                    <View style={[styles.customRadio, isSelected && styles.customRadioSelected]}>
-                        {isSelected && <View style={styles.customRadioDot} />}
+                <Pressable onPress={handleRadioPress} style={styles.radioWrapper}>
+                    <View style={[styles.customRadio, radioFilled && styles.customRadioSelected]}>
+                        {radioFilled && <View style={styles.customRadioDot} />}
                     </View>
                 </Pressable>
                 <View style={styles.content}>

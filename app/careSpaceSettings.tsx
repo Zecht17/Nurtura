@@ -1,6 +1,6 @@
 import EditableTaskCard from "@/components/cards/editableTaskCard";
-import NoPendingTask from "@/components/cards/noPendingTask";
 import EditorRoleCard from "@/components/cards/editorRoleCard";
+import NoPendingTask from "@/components/cards/noPendingTask";
 import OwnerRoleCard from "@/components/cards/ownerRoleCard";
 import ViewerRoleCard from "@/components/cards/viewerRoleCard";
 import AddDependentModal from "@/components/modals/addDependentModal";
@@ -19,6 +19,8 @@ import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
 import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useDependents } from "@/context/DependentContext";
+import { useTasks } from "@/context/tasksContext";
+import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
 import { Feather } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
@@ -30,126 +32,15 @@ import React, { useEffect, useState } from "react";
 import { Alert, Pressable, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-type RoleLabel = "Owner" | "Editor" | "Viewer";
-
-type PersonWithRole = {
-    memberId?: number;
-    initial: string;
-    name: string;
-    role: RoleLabel;
-    note?: string;
-};
-
-type CareSpaceTask = {
-    id: string;
-    title: string;
-    dependent: string;
-    description: string;
-    status: "pending" | "completed" | "missing";
-    dueDate?: string;
-    dueTime?: string;
-    priority?: string;
-    recurringPattern?: string | null;
-};
-
-const getParamValue = (value?: string | string[]) => {
-    if (Array.isArray(value)) {
-        return value[0];
-    }
-
-    return value;
-};
-
-const parseDependentNames = (value?: string | string[]) => {
-    const raw = getParamValue(value);
-
-    if (!raw) {
-        return ["Emma Johnson"];
-    }
-
-    try {
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) {
-            return ["Emma Johnson"];
-        }
-
-        const normalized = parsed
-            .filter((item): item is string => typeof item === "string")
-            .map((name) => name.trim())
-            .filter((name) => name.length > 0);
-
-        return normalized;
-    } catch {
-        return ["Emma Johnson"];
-    }
-};
-
-const parsePeopleWithRole = (value: string | string[] | undefined, fallback: PersonWithRole[]) => {
-    const raw = getParamValue(value);
-
-    if (!raw) {
-        return fallback;
-    }
-
-    try {
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) {
-            return fallback;
-        }
-
-        const normalized = parsed
-            .filter((item): item is PersonWithRole => typeof item === "object" && item !== null)
-            .map((item) => ({
-                memberId: typeof (item as { memberId?: unknown }).memberId === "number" ? (item as { memberId: number }).memberId : undefined,
-                initial: typeof item.initial === "string" ? item.initial : getInitial(typeof item.name === "string" ? item.name : ""),
-                name: typeof item.name === "string" ? item.name : "Unknown",
-                role: item.role === "Owner" || item.role === "Editor" || item.role === "Viewer" ? item.role : "Viewer",
-                note: typeof item.note === "string" ? item.note : undefined,
-            }))
-            .filter((item) => item.name.trim().length > 0);
-
-        return normalized;
-    } catch {
-        return fallback;
-    }
-};
-
-const parseCareTasks = (value?: string | string[]) => {
-    const raw = getParamValue(value);
-
-    if (!raw) {
-        return [] as CareSpaceTask[];
-    }
-
-    try {
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) {
-            return [] as CareSpaceTask[];
-        }
-
-        return parsed
-            .filter((item): item is CareSpaceTask => typeof item === "object" && item !== null)
-            .map((item, index) => ({
-                id: typeof item.id === "string" ? item.id : `task-${index}`,
-                title: typeof item.title === "string" ? item.title : "Untitled Task",
-                dependent: typeof item.dependent === "string" ? item.dependent : "Unknown",
-                description: typeof item.description === "string" ? item.description : "",
-                status: item.status === "pending" || item.status === "completed" || item.status === "missing" ? item.status : "pending",
-                dueDate: typeof item.dueDate === "string" ? item.dueDate : undefined,
-                dueTime: typeof item.dueTime === "string" ? item.dueTime : undefined,
-                priority: typeof item.priority === "string" ? item.priority : undefined,
-                recurringPattern: typeof item.recurringPattern === "string" || item.recurringPattern === null ? item.recurringPattern : undefined,
-            }));
-    } catch {
-        return [] as CareSpaceTask[];
-    }
-};
-
-const getInitial = (name: string) => {
-    const trimmed = name.trim();
-    return trimmed.length > 0 ? trimmed.charAt(0).toUpperCase() : "?";
-};
+import {
+    CareSpaceTask,
+    PersonWithRole,
+    getInitial,
+    getParamValue,
+    parseCareTasks,
+    parseDependentNames,
+    parsePeopleWithRole,
+} from "./careSpaceSettings.utils";
 
 export default function CareSpaceSettings() {
     StatusBar.setBarStyle("dark-content");
@@ -176,6 +67,7 @@ export default function CareSpaceSettings() {
         generateJoinCode,
     } = useCareSpaces();
     const { dependents } = useDependents();
+    const { deleteTaskApi } = useTasks();
     const careSpaceId = getParamValue(params.id);
     const selectedCareSpace = careSpaceId ? careSpaces.find((item) => item.id === careSpaceId) : undefined;
     const currentUserRole = selectedCareSpace?.currentUserRole;
@@ -578,7 +470,7 @@ export default function CareSpaceSettings() {
                                         selectedTask={selectedTask}
                                         onSelect={setSelectedTask}
                                         title={task.title}
-                                        dependent={task.dependent}
+                                        dependent={resolveDependentDisplayName(task, dependents)}
                                         description={task.description}
                                         statusTags={
                                             <>
@@ -588,8 +480,24 @@ export default function CareSpaceSettings() {
                                             </>
                                         }
                                         dateTag={renderDateTag(task.dueDate, task.dueTime)}
-                                        onEdit={() => router.push({ pathname: "/editTaskPage", params: { id: task.id } })}
-                                        onPress={() => router.push({ pathname: "/taskDetails", params: { id: task.id } })}
+                                        onEdit={() =>
+                                            router.push({
+                                                pathname: "/editTaskPage",
+                                                params: {
+                                                    id: task.id,
+                                                    careSpaceId: resolveCareSpaceNumericId() ? String(resolveCareSpaceNumericId()) : undefined,
+                                                },
+                                            })
+                                        }
+                                        onPress={() =>
+                                            router.push({
+                                                pathname: "/taskDetails",
+                                                params: {
+                                                    id: task.id,
+                                                    careSpaceId: resolveCareSpaceNumericId() ? String(resolveCareSpaceNumericId()) : undefined,
+                                                },
+                                            })
+                                        }
                                         onDelete={() => setPendingDeleteId(task.id)}
                                     />
                                 ))}
@@ -600,15 +508,38 @@ export default function CareSpaceSettings() {
                         <DeleteTaskModal
                             visible={pendingDeleteId !== null}
                             taskTitle={careSpaceTasks.find((taskItem) => taskItem.id === pendingDeleteId)?.title}
-                            onConfirm={() => {
-                                if (pendingDeleteId) {
+                            onConfirm={async () => {
+                                if (!pendingDeleteId) {
+                                    setPendingDeleteId(null);
+                                    return;
+                                }
+
+                                const numericTaskId = Number.parseInt(pendingDeleteId, 10);
+                                const numericCareSpaceId = resolveCareSpaceNumericId();
+
+                                if (!Number.isInteger(numericTaskId) || numericTaskId <= 0) {
+                                    Alert.alert("Delete Failed", "Unable to resolve task ID.");
+                                    return;
+                                }
+
+                                if (!numericCareSpaceId) {
+                                    Alert.alert("Delete Failed", "Unable to resolve care space ID.");
+                                    return;
+                                }
+
+                                try {
+                                    await deleteTaskApi(numericTaskId, numericCareSpaceId);
                                     setCareSpaceTasks((prev) => prev.filter((taskItem) => taskItem.id !== pendingDeleteId));
 
                                     if (careSpaceId) {
                                         removeTaskFromCareSpace(careSpaceId, pendingDeleteId);
                                     }
+
+                                    setPendingDeleteId(null);
+                                } catch (error) {
+                                    const message = error instanceof Error ? error.message : "Unable to delete task.";
+                                    Alert.alert("Delete Failed", message);
                                 }
-                                setPendingDeleteId(null);
                             }}
                             onCancel={() => setPendingDeleteId(null)}
                         />
