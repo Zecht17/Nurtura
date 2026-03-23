@@ -40,7 +40,7 @@ import {
     parseCareTasks,
     parseDependentNames,
     parsePeopleWithRole,
-} from "./careSpaceSettings.utils";
+} from "@/utils/careSpaceSettings.utils";
 
 export default function CareSpaceSettings() {
     StatusBar.setBarStyle("dark-content");

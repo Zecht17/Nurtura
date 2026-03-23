@@ -50,6 +50,11 @@ export default function AddTaskScreen() {
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [timeInputValue, setTimeInputValue] = useState(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }));
 
+    const resolveCareSpaceNumericId = (careSpaceIdStr: string) => {
+        const match = careSpaceIdStr.match(/(\d+)$/);
+        return match ? Number.parseInt(match[1], 10) : Number.parseInt(careSpaceIdStr.replace("care-space-", ""), 10);
+    };
+
     const selectableDependents = dependents.filter((dependent) => {
         const resolvedUserId = dependent.userId ?? dependent.dependentId;
         return typeof resolvedUserId === "number" && resolvedUserId > 0;
@@ -136,13 +141,16 @@ export default function AddTaskScreen() {
         }
     };
 
+    // Do not require due time to be in the future — same-day overdue times should still allow create.
+    // (Reminder UI still uses isInPast() separately.)
     const isFormValid = Boolean(
         title.trim() &&
         selectedCareSpaceId &&
-        (applyToAll ? selectableDependents.length > 0 : selectedDependentUserId) &&
+        (applyToAll
+            ? selectableDependents.length > 0
+            : typeof selectedDependentUserId === "number" && selectedDependentUserId > 0) &&
         priority !== "Select Priority" &&
-        dateInputValue.trim() &&
-        !isInPast()
+        dateInputValue.trim(),
     );
 
     const toIsoFromDateTime = (date: Date, time: Date) => {
@@ -247,15 +255,15 @@ export default function AddTaskScreen() {
                                     style={styles.dropdown}
                                 >
                                     {careSpaces.map((careSpace) => {
-                                        const numericId = Number.parseInt(careSpace.id.replace('care-space-', ''), 10);
+                                        const numericId = resolveCareSpaceNumericId(careSpace.id);
 
-                                        if (Number.isNaN(numericId)) {
+                                        if (!Number.isInteger(numericId) || numericId <= 0) {
                                             return null;
                                         }
 
                                         return (
                                             <Menu.Item
-                                                key={careSpace.id}
+                                                key={`care-space-menu-${careSpace.id}`}
                                                 onPress={() => {
                                                     setCareSpace(careSpace.title);
                                                     setSelectedCareSpaceId(numericId);
@@ -299,7 +307,7 @@ export default function AddTaskScreen() {
 
                                         return (
                                             <Menu.Item
-                                                key={dependent.id}
+                                                key={`dependent-menu-${dependent.id}-${resolvedUserId}`}
                                                 onPress={() => {
                                                     setDependent(dependent.name);
                                                     setSelectedDependentUserId(resolvedUserId);

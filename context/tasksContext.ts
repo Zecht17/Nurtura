@@ -1,6 +1,7 @@
 import { API_URL, useAuth } from "@/context/AuthContext";
 import { useUser } from "@/context/UserContext";
-import { ReactNode, createContext, createElement, useContext, useState } from "react";
+import { collectAssigneeIdsFromTask, extractAssigneeIdsFromApiPayload } from "@/utils/taskAssigneeIds";
+import { ReactNode, createContext, createElement, useContext, useEffect, useRef, useState } from "react";
 
 export type AuthTokenFetch = (accessToken: string) => Promise<Response>;
 
@@ -19,7 +20,9 @@ export type Task = {
     reminderEnabled?: boolean;
     assignments?: any[];
     completions?: any[];
-    /** Assignee user IDs — used to filter list views vs API subsets */
+    /** Present when list/detail API sends schedules; used to resolve `care_space_id` for DELETE/detail. */
+    schedules?: any[];
+    /** Assignee ids from API (`user_id` and/or `dependent_id`) — used for filters and resolving display names */
     assignedUserIds?: number[];
     /** Creator user id (`assigned_by` from API) */
     assignedByUserId?: number;
@@ -117,6 +120,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const [tasks, setTasks] = useState([] as Task[]);
     const { user, refreshAccessToken, logout } = useAuth();
     const { profileData } = useUser();
+
+    const listMyTasksRef = useRef<((filters?: TaskListFilters) => Promise<Task[]>) | null>(null);
+    const listCreatedByMeTasksRef = useRef<((filters?: TaskListFilters) => Promise<Task[]>) | null>(null);
 
     const addTask = (task: Task) => {
         setTasks((prev) => [...prev, task]);
@@ -224,7 +230,10 @@ export function TasksProvider({ children }: { children: ReactNode }) {
             clientCreatedAt: Date.now(),
         };
 
-        setTasks((prev) => [...prev, createdTask]);
+        setTasks((prev) => {
+            const withoutSameId = prev.filter((t) => t.id !== createdTask.id);
+            return [...withoutSameId, createdTask];
+        });
         return createdTask;
     };
 
@@ -368,6 +377,16 @@ export function TasksProvider({ children }: { children: ReactNode }) {
                 return u.username.trim();
             }
         }
+        const dep = a.dependent;
+        if (dep && typeof dep === "object") {
+            const nested = [dep.first_name, dep.middle_name, dep.last_name]
+                .filter(Boolean)
+                .join(" ")
+                .replace(/\s+/g, " ")
+                .trim();
+            if (nested) return nested;
+            if (typeof dep.name === "string" && dep.name.trim()) return dep.name.trim();
+        }
         const direct = [a.dependent_name, a.assignee_name, a.member_name, a.full_name, a.display_name, a.name].find(
             (v) => typeof v === "string" && v.trim().length > 0,
         ) as string | undefined;
@@ -381,7 +400,10 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         if (fromTask) return fromTask.trim();
 
         if (!Array.isArray(assignments) || assignments.length === 0) {
-            return "Unassigned";
+            const hasAssigneesFromRoot =
+                (Array.isArray(apiTask?.assigned_user_ids) && apiTask.assigned_user_ids.length > 0) ||
+                (typeof apiTask?.assigned_user_id === "number" && apiTask.assigned_user_id > 0);
+            return hasAssigneesFromRoot ? "Assigned Member" : "Unassigned";
         }
 
         for (const a of assignments) {
@@ -392,21 +414,37 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         return "Assigned Member";
     };
 
-    const extractAssignedUserIds = (assignments: any[] | undefined): number[] | undefined => {
-        if (!Array.isArray(assignments) || assignments.length === 0) {
-            return undefined;
+    /**
+     * List payloads often use `dependent_id` on assignments, or only expose ids on the task root.
+     * Values may be user_id OR dependent_profile id — UI resolves names via DependentsContext.
+     */
+    const extractAssigneeIdsFromApiTask = (apiTask: any): number[] | undefined => {
+        const ids = new Set<number>();
+        const assignments = Array.isArray(apiTask?.assignments) ? apiTask.assignments : [];
+
+        for (const a of assignments) {
+            const uRaw = a?.user_id ?? a?.user?.user_id ?? a?.assigned_user_id;
+            const uNum = Number(uRaw);
+            if (Number.isInteger(uNum) && uNum > 0) {
+                ids.add(uNum);
+                continue;
+            }
+            const dRaw = a?.dependent_id ?? a?.dependent_profile_id;
+            const dNum = Number(dRaw);
+            if (Number.isInteger(dNum) && dNum > 0) {
+                ids.add(dNum);
+            }
         }
 
-        const ids = assignments
-            .map((a) => {
-                const raw = a?.user_id ?? a?.user?.user_id ?? a?.assigned_user_id;
+        if (Array.isArray(apiTask?.assigned_user_ids)) {
+            for (const raw of apiTask.assigned_user_ids) {
                 const n = Number(raw);
-                return Number.isInteger(n) && n > 0 ? n : null;
-            })
-            .filter((x): x is number => x != null);
+                if (Number.isInteger(n) && n > 0) ids.add(n);
+            }
+        }
 
-        const unique = [...new Set(ids)];
-        return unique.length > 0 ? unique : undefined;
+        const out = [...ids];
+        return out.length > 0 ? out : undefined;
     };
 
     /** List payloads often omit root `care_space_id`; scan nested rows for DELETE/detail query param. */
@@ -427,6 +465,37 @@ export function TasksProvider({ children }: { children: ReactNode }) {
             }
         }
         return undefined;
+    };
+
+    /**
+     * Task list endpoints may return a raw array or a wrapper (`{ data: [...] }`, `{ tasks: [...] }`, etc.).
+     * If we only accept top-level arrays, the client maps zero tasks and the Home dashboard stays empty.
+     */
+    const normalizeTaskListJsonPayload = (data: unknown): any[] => {
+        if (Array.isArray(data)) {
+            return data;
+        }
+        if (data && typeof data === "object") {
+            const o = data as Record<string, unknown>;
+            const keys = ["tasks", "data", "items", "results", "task_list"] as const;
+            for (const k of keys) {
+                const v = o[k];
+                if (Array.isArray(v)) {
+                    return v;
+                }
+            }
+            const inner = o.data;
+            if (inner && typeof inner === "object" && inner !== null) {
+                const d = inner as Record<string, unknown>;
+                for (const k of keys) {
+                    const v = d[k];
+                    if (Array.isArray(v)) {
+                        return v;
+                    }
+                }
+            }
+        }
+        return [];
     };
 
     const mapApiTaskToState = (
@@ -465,10 +534,11 @@ export function TasksProvider({ children }: { children: ReactNode }) {
             priority: normalizeApiPriority(apiTask?.priority),
             recurringPattern: normalizeRecurringPattern(Array.isArray(apiTask?.schedules) ? apiTask.schedules : []),
             reminderEnabled: false,
-            assignedUserIds: extractAssignedUserIds(Array.isArray(apiTask?.assignments) ? apiTask.assignments : []),
+            assignedUserIds: extractAssigneeIdsFromApiPayload(apiTask),
             assignedByUserId,
             assignments: Array.isArray(apiTask?.assignments) ? apiTask.assignments : undefined,
             completions: Array.isArray(apiTask?.completions) ? apiTask.completions : undefined,
+            schedules: Array.isArray(apiTask?.schedules) ? apiTask.schedules : undefined,
         };
     };
 
@@ -500,8 +570,14 @@ export function TasksProvider({ children }: { children: ReactNode }) {
             throw new Error(parseApiError(data));
         }
 
-        const taskItems = Array.isArray(data) ? data : [];
-        const mappedTasks = taskItems.map((apiTask) => mapApiTaskToState(apiTask, fallbackStatus, careSpaceId));
+        const taskItems = normalizeTaskListJsonPayload(data);
+        const mappedTasks = taskItems.flatMap((apiTask) => {
+            try {
+                return [mapApiTaskToState(apiTask, fallbackStatus, careSpaceId)];
+            } catch {
+                return [];
+            }
+        });
 
         let mergedTasks: Task[] = [];
 
@@ -513,19 +589,55 @@ export function TasksProvider({ children }: { children: ReactNode }) {
                 const previous = previousById.get(task.id);
                 const preservedReminder = previous?.reminderEnabled;
 
+                const mergedIdsFromApiOrPrev =
+                    (task.assignedUserIds?.length ?? 0) > 0 ? task.assignedUserIds : previous?.assignedUserIds;
+                const fromNestedRows = collectAssigneeIdsFromTask({
+                    assignedUserIds: [],
+                    assignments: task.assignments,
+                    completions: task.completions,
+                    schedules: task.schedules,
+                });
+                const mergedIdSet = new Set<number>([...(mergedIdsFromApiOrPrev ?? []), ...fromNestedRows]);
+                const mergedIds = mergedIdSet.size > 0 ? [...mergedIdSet] : undefined;
+                const apiPlaceholder = !task.dependent || task.dependent === "Assigned Member";
+                const mergedDependent =
+                    !apiPlaceholder && task.dependent
+                        ? task.dependent
+                        : previous?.dependent && previous.dependent !== "Assigned Member"
+                            ? previous.dependent
+                            : task.dependent;
+
+                const mergedCareSpaceId = task.careSpaceId ?? previous?.careSpaceId;
+                const mergedSchedules = task.schedules ?? previous?.schedules;
+                const mergedAssignments = task.assignments ?? previous?.assignments;
+                const mergedCompletions = task.completions ?? previous?.completions;
+
                 return {
                     ...task,
+                    careSpaceId: mergedCareSpaceId,
+                    schedules: mergedSchedules,
+                    assignments: mergedAssignments,
+                    completions: mergedCompletions,
                     reminderEnabled: typeof preservedReminder === "boolean" ? preservedReminder : Boolean(task.reminderEnabled),
                     // List payloads sometimes omit assigned_by; keep creator id from optimistic create or prior merge.
                     assignedByUserId: task.assignedByUserId ?? previous?.assignedByUserId,
                     clientCreatedAt: previous?.clientCreatedAt ?? task.clientCreatedAt,
+                    assignedUserIds: mergedIds,
+                    dependent: mergedDependent,
                 };
             });
 
             // Union with previous tasks not returned by this endpoint. Each list (me vs created-by-me vs member)
             // is a subset; a second fetch must not drop tasks that only came from the first (fixes Home/Calendar
             // emptying after opening the Tasks tab).
-            const preserved = prev.filter((task) => !apiIds.has(task.id));
+            const preservedRaw = prev.filter((task) => !apiIds.has(task.id));
+            const preservedSeen = new Set<string>();
+            const preserved: Task[] = [];
+            for (const task of preservedRaw) {
+                if (preservedSeen.has(task.id)) continue;
+                preservedSeen.add(task.id);
+                preserved.push(task);
+            }
 
             mergedTasks = [...fromApi, ...preserved];
             return mergedTasks;
@@ -593,6 +705,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
             fallbackStatus,
         );
     };
+
+    listMyTasksRef.current = listMyTasks;
+    listCreatedByMeTasksRef.current = listCreatedByMeTasks;
 
     const updateTaskApi = async (taskId: number, careSpaceId: number, payload: UpdateTaskPayload) => {
         if (!Number.isInteger(taskId) || taskId <= 0) {
@@ -858,6 +973,33 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const removeTask = (id: string) => {
         setTasks((prev) => prev.filter((task) => task.id !== id));
     };
+
+    /** Load the same slices as the Tasks tab ("My tasks") so Home / Calendar have data before opening Tasks. */
+    useEffect(() => {
+        if (!user?.access_token) {
+            return;
+        }
+        let cancelled = false;
+        const statuses: Array<"pending" | "completed" | "missed"> = ["pending", "completed", "missed"];
+        (async () => {
+            for (const status of statuses) {
+                if (cancelled) return;
+                try {
+                    const lm = listMyTasksRef.current;
+                    const lcm = listCreatedByMeTasksRef.current;
+                    if (!lm || !lcm) return;
+                    await lm({ dateFilter: "all", status });
+                    if (cancelled) return;
+                    await lcm({ dateFilter: "all", status });
+                } catch {
+                    // Network / auth — Tasks screen can refetch
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.access_token]);
 
     const value = {
         tasks,

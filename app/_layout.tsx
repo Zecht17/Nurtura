@@ -8,6 +8,7 @@ import ReminderModal from "../components/modals/reminderModal";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { CareSpacesProvider } from "../context/CareSpacesContext";
 import { ChatbotProvider } from "../context/ChatbotContext";
+import { DashboardProvider } from "../context/dashboardContext";
 import { DependentProvider } from "../context/DependentContext";
 import { TasksProvider, useTasks } from "../context/tasksContext";
 import { UserProvider } from "../context/UserContext";
@@ -69,6 +70,7 @@ export default function RootLayout() {
         <UserProvider>
           <ChatbotProvider>
             <DependentProvider>
+              <DashboardProvider>
               <TasksProvider>
                 <CareSpacesProvider>
                   <PaperProvider theme={MD3LightTheme}>
@@ -96,6 +98,7 @@ export default function RootLayout() {
                   </PaperProvider>
                 </CareSpacesProvider>
               </TasksProvider>
+              </DashboardProvider>
             </DependentProvider>
           </ChatbotProvider>
         </UserProvider>

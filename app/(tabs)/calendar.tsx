@@ -250,6 +250,12 @@ export default function CalendarScreen() {
                                     value={task.id}
                                     selectedTask={selectedTask}
                                     onSelect={setSelectedTask}
+                                    isCompleted={task.computedStatus === "completed"}
+                                    onRadioPress={
+                                        task.computedStatus !== "completed"
+                                            ? () => setPendingCompleteId(task.id)
+                                            : undefined
+                                    }
                                     title={task.title}
                                     dependent={resolveDependentDisplayName(task, dependents)}
                                     description={task.description}

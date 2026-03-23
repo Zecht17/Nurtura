@@ -1,24 +1,21 @@
 import { useTasks } from "@/context/tasksContext";
+import { computeDashboardMetricsFromTasks } from "@/utils/dashboardFromTasks";
 import Feather from "@expo/vector-icons/Feather";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-function localTodayYyyyMmDd(): string {
-  const n = new Date();
-  const y = n.getFullYear();
-  const m = String(n.getMonth() + 1).padStart(2, "0");
-  const d = String(n.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+type Props = {
+  nowMs: number;
+};
 
-export default function TodayTasksCard() {
+export default function TodayTasksCard({ nowMs }: Props) {
   const { tasks } = useTasks();
 
-  const dueTodayCount = useMemo(() => {
-    const key = localTodayYyyyMmDd();
-    return tasks.filter((t) => t.dueDate && t.dueDate === key).length;
-  }, [tasks]);
+  const mainCount = useMemo(() => {
+    const { totalTasks } = computeDashboardMetricsFromTasks(tasks, "today", nowMs);
+    return String(totalTasks);
+  }, [tasks, nowMs]);
 
   return (
     <LinearGradient
@@ -29,7 +26,7 @@ export default function TodayTasksCard() {
     >
       <Text style={styles.title}>Today's Tasks</Text>
       <View style={styles.row}>
-        <Text style={styles.count}>{dueTodayCount}</Text>
+        <Text style={styles.count}>{mainCount}</Text>
         <Feather name="check-circle" size={30} color="#ffffff" />
       </View>
     </LinearGradient>
@@ -54,6 +51,7 @@ const styles = StyleSheet.create({
     gap: 50,
     alignContent: "center",
     justifyContent: "center",
+    alignItems: "center",
   },
   count: {
     fontSize: 35,

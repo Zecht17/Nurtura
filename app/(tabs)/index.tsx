@@ -1,5 +1,3 @@
-import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
-import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
 import CompleteTaskModal from "@/components/modals/CompleteTaskModal";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
@@ -10,9 +8,12 @@ import MissedStatus from "@/components/tags/status/missed";
 import { useAuth } from "@/context/AuthContext";
 import { useDependents } from "@/context/DependentContext";
 import { useTasks } from "@/context/tasksContext";
+import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
+import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
+import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View, } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -122,6 +123,16 @@ export default function Index() {
     return inRange;
   }, [tasks, nowMs, range]);
 
+  const dashboardFilter =
+    range === "Today" ? "today" : range === "This Week" ? "week" : "month";
+
+  const overviewSubheader =
+    range === "Today"
+      ? "Here's your caregiving overview for today."
+      : range === "This Week"
+        ? "Here's your caregiving overview for this week."
+        : "Here's your caregiving overview for this month.";
+
   const emptyRangeMessage =
     range === "Today"
       ? "No tasks due today."
@@ -204,17 +215,17 @@ export default function Index() {
           {/* This is the Greeting Header */}
           <View style={styles.headerContainer}>
             <Text style={styles.headerTitle}>Welcome Back, {user?.username ?? "User"}!</Text>
-            <Text style={styles.subHeader}>Here's your caregiving overview for today.</Text>
+            <Text style={styles.subHeader}>{overviewSubheader}</Text>
           </View>
 
           {/* This the Summary Components */}
           <View style={styles.summaryContainer}>
-            <WeekSummaryCard />
+            <WeekSummaryCard filter={dashboardFilter} nowMs={nowMs} />
           </View>
           
           {/* This is for the Today's Tasks and Dependents */}
           <View style={styles.cardsRow}>
-            <TodayTasksCard />
+            <TodayTasksCard nowMs={nowMs} />
             <DependentsCard />
           </View>
 
@@ -269,7 +280,9 @@ export default function Index() {
                   onSelect={setSelectedTask}
                   isCompleted={task.computedStatus === "completed"}
                   onRadioPress={
-                    task.computedStatus === "pending" ? () => setPendingCompleteId(task.id) : undefined
+                    task.computedStatus !== "completed"
+                      ? () => setPendingCompleteId(task.id)
+                      : undefined
                   }
                   title={task.title}
                   dependent={resolveDependentDisplayName(task, dependents)}

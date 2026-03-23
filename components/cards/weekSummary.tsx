@@ -1,8 +1,56 @@
+import { useTasks } from "@/context/tasksContext";
+import type { DashboardTimeFilter } from "@/utils/dashboardFromTasks";
+import { computeDashboardMetricsFromTasks } from "@/utils/dashboardFromTasks";
 import Octicons from "@expo/vector-icons/Octicons";
 import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef } from "react";
+import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 
-export default function WeekSummaryCard() {
+const FILTER_LABEL: Record<DashboardTimeFilter, string> = {
+  today: "Today's Summary",
+  week: "This Week's Summary",
+  month: "This Month's Summary",
+};
+
+type Props = {
+  filter: DashboardTimeFilter;
+  /** Same clock as Home task list (`computeComputedTaskStatus` / overdue). */
+  nowMs: number;
+};
+
+export default function WeekSummaryCard({ filter, nowMs }: Props) {
+  const { tasks } = useTasks();
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  const metrics = useMemo(
+    () => computeDashboardMetricsFromTasks(tasks, filter, nowMs),
+    [tasks, filter, nowMs],
+  );
+
+  const targetPct = metrics.completionPercentage;
+
+  useEffect(() => {
+    progressAnim.setValue(0);
+    Animated.timing(progressAnim, {
+      toValue: targetPct,
+      duration: 750,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [targetPct, progressAnim]);
+
+  const headerText = FILTER_LABEL[filter];
+
+  const display = useMemo(
+    () => ({
+      total: String(metrics.totalTasks),
+      completed: String(metrics.completedTasks),
+      rate: `${metrics.completionPercentage}%`,
+      progressLabel: `${metrics.completionPercentage}%`,
+    }),
+    [metrics],
+  );
+
   return (
     <LinearGradient
       colors={["#7C6FDC", "rgb(137, 94, 170)"]}
@@ -12,22 +60,22 @@ export default function WeekSummaryCard() {
     >
       <View style={styles.headerRow}>
         <Octicons name="graph" size={24} color="white" />
-        <Text style={styles.headerText}>This Week's Summary</Text>
+        <Text style={styles.headerText}>{headerText}</Text>
       </View>
 
       <View style={styles.progressRow}>
         <View style={styles.progressItem}>
-          <Text style={styles.progressNumber}>6</Text>
+          <Text style={styles.progressNumber}>{display.total}</Text>
           <Text style={styles.progressText}>Total Tasks</Text>
         </View>
 
         <View style={styles.progressItem}>
-          <Text style={styles.progressNumber}>0</Text>
+          <Text style={styles.progressNumber}>{display.completed}</Text>
           <Text style={styles.progressText}>Completed</Text>
         </View>
 
         <View style={styles.progressItem}>
-          <Text style={styles.progressNumber}>0%</Text>
+          <Text style={styles.progressNumber}>{display.rate}</Text>
           <Text style={styles.progressText}>Success Rate</Text>
         </View>
       </View>
@@ -35,9 +83,21 @@ export default function WeekSummaryCard() {
       <View style={styles.completionContainer}>
         <View style={styles.completionRow}>
           <Text style={styles.completionText}>Completion Progress</Text>
-          <Text style={styles.completionText}>0%</Text>
+          <Text style={styles.completionText}>{display.progressLabel}</Text>
         </View>
-        <View style={styles.progressBar}></View>
+        <View style={styles.progressBarTrack}>
+          <Animated.View
+            style={[
+              styles.progressBarFill,
+              {
+                width: progressAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: ["0%", "100%"],
+                }),
+              },
+            ]}
+          />
+        </View>
       </View>
     </LinearGradient>
   );
@@ -103,11 +163,17 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     marginTop: 1,
   },
-  progressBar: {
+  progressBarTrack: {
     marginTop: 5,
     height: 10,
     borderRadius: 5,
     backgroundColor: "#ffffff2c",
     width: "100%",
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 5,
+    backgroundColor: "#ffffff",
   },
 });

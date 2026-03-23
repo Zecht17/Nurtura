@@ -3,8 +3,13 @@ import DeleteTaskModal from "@/components/modals/DeleteTaskModal";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
+import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useTasks } from "@/context/tasksContext";
-import { resolveTaskCareSpaceId } from "@/utils/resolveTaskCareSpaceId";
+import {
+    parseCareSpaceNumericIdFromString,
+    parseNumericTaskIdForApi,
+    resolveTaskCareSpaceId,
+} from "@/utils/resolveTaskCareSpaceId";
 import { Feather } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -15,6 +20,7 @@ import { Alert, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text
 
 export default function TaskDetails() {
     const { tasks, getTaskDetail, deleteTaskApi } = useTasks();
+    const { careSpaces } = useCareSpaces();
     const { id, careSpaceId } = useLocalSearchParams<{ id?: string; careSpaceId?: string }>();
 
     StatusBar.setBarStyle("dark-content");
@@ -30,16 +36,21 @@ export default function TaskDetails() {
     const [detailError, setDetailError] = useState<string | null>(null);
     const [taskDetail, setTaskDetail] = useState<Awaited<ReturnType<typeof getTaskDetail>> | null>(null);
 
-    const numericTaskId = useMemo(() => {
-        const source = (id || task?.id || "").trim();
-        const parsed = Number.parseInt(source, 10);
-        return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-    }, [id, task?.id]);
+    const numericTaskId = useMemo(() => parseNumericTaskIdForApi(id, task?.id), [id, task?.id]);
+
+    const fallbackSingleCareSpaceNumericId = useMemo(() => {
+        if (careSpaces.length !== 1) return null;
+        const n = parseCareSpaceNumericIdFromString(careSpaces[0].id);
+        return typeof n === "number" && n > 0 ? n : null;
+    }, [careSpaces]);
 
     const numericCareSpaceId = useMemo(() => {
-        const resolved = resolveTaskCareSpaceId(task, { routeCareSpaceId: careSpaceId });
+        const resolved = resolveTaskCareSpaceId(task, {
+            routeCareSpaceId: careSpaceId,
+            fallbackSingleCareSpaceNumericId,
+        });
         return resolved ?? null;
-    }, [careSpaceId, task]);
+    }, [task, careSpaceId, fallbackSingleCareSpaceNumericId]);
 
     useEffect(() => {
         if (!numericTaskId || !numericCareSpaceId) {

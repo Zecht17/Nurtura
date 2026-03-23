@@ -15,7 +15,11 @@ import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
 import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
-import { resolveTaskCareSpaceId } from "@/utils/resolveTaskCareSpaceId";
+import {
+    parseCareSpaceNumericIdFromString,
+    parseNumericTaskIdForApi,
+    resolveTaskCareSpaceId,
+} from "@/utils/resolveTaskCareSpaceId";
 import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
 import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useDependents } from "@/context/DependentContext";
@@ -25,7 +29,7 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, TextInput as RNTextInput, ScrollView, StatusBar, StyleSheet, Text, UIManager, View } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -65,6 +69,12 @@ export default function TaskScreen() {
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [pendingCompleteId, setPendingCompleteId] = useState<string | null>(null);
     const [completing, setCompleting] = useState(false);
+
+    const fallbackSingleCareSpaceNumericId = useMemo(() => {
+        if (careSpaces.length !== 1) return null;
+        const n = parseCareSpaceNumericIdFromString(careSpaces[0].id);
+        return typeof n === "number" && n > 0 ? n : null;
+    }, [careSpaces]);
 
     const resolveCareSpaceId = (id: string) => {
         const match = id.match(/(\d+)$/);
@@ -159,7 +169,11 @@ export default function TaskScreen() {
         return () => {
             isMounted = false;
         };
-    }, [selectedAssignee, selectedCareSpaceId, selectedStatus, listMyTasks, listCreatedByMeTasks, listTasksByMember]);
+        // Do not depend on listMyTasks / listCreatedByMeTasks / listTasksByMember — they are new
+        // function references on every TasksProvider render, which would retrigger this effect
+        // after every fetch (setTasks) and keep "Loading tasks..." stuck on screen.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- list* from context intentionally omitted
+    }, [selectedAssignee, selectedCareSpaceId, selectedStatus]);
     const decoratedTasks = tasks.map((task) => {
         const due = parseLocalDueDateTime(task.dueDate, task.dueTime);
         const computedStatus = computeComputedTaskStatus(task.status, due, nowMs);
@@ -475,7 +489,7 @@ export default function TaskScreen() {
                                     onSelect={() => {}}
                                     isCompleted={task.computedStatus === "completed"}
                                     onRadioPress={
-                                        task.computedStatus === "pending"
+                                        task.computedStatus !== "completed"
                                             ? () => setPendingCompleteId(task.id)
                                             : undefined
                                     }
@@ -561,11 +575,12 @@ export default function TaskScreen() {
                                 }
 
                                 const taskToDelete = tasks.find((t) => t.id === pendingDeleteId);
-                                const numericTaskId = Number.parseInt(pendingDeleteId, 10);
+                                const numericTaskId = parseNumericTaskIdForApi(pendingDeleteId, taskToDelete?.id);
                                 const numericCareSpaceId = resolveTaskCareSpaceId(taskToDelete, {
                                     filterCareSpaceId: selectedCareSpaceId,
+                                    fallbackSingleCareSpaceNumericId,
                                 });
-                                if (!Number.isInteger(numericTaskId) || numericTaskId <= 0) {
+                                if (numericTaskId === null || numericTaskId <= 0) {
                                     Alert.alert("Delete failed", "Unable to resolve task ID.");
                                     return;
                                 }

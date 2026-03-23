@@ -1,7 +1,7 @@
 import Feather from "@expo/vector-icons/Feather";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Checkbox, Menu, Switch, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,6 +10,7 @@ import CustomTimePickerModal from "../components/modals/CustomTimePickerModal";
 import { useCareSpaces } from "../context/CareSpacesContext";
 import { useDependents } from "../context/DependentContext";
 import { Task, useTasks } from "../context/tasksContext";
+import { collectAssigneeIdsFromTask } from "../utils/taskAssigneeIds";
 
 export default function EditTaskScreen() {
     const router = useRouter();
@@ -63,6 +64,9 @@ export default function EditTaskScreen() {
     const [timeInputValue, setTimeInputValue] = useState(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }));
     const [savingTask, setSavingTask] = useState(false);
 
+    const userEditedCareSpaceRef = useRef(false);
+    const userEditedDependentRef = useRef(false);
+
     const parseExistingDate = (taskToParse: Task) => {
         if (!taskToParse.dueDate) return new Date();
         const d = taskToParse.dueDate.trim();
@@ -90,6 +94,9 @@ export default function EditTaskScreen() {
     useEffect(() => {
         if (!task) return;
 
+        userEditedCareSpaceRef.current = false;
+        userEditedDependentRef.current = false;
+
         const parsedDate = parseExistingDate(task);
         const parsedTime = parseExistingTime(task, parsedDate);
 
@@ -107,14 +114,24 @@ export default function EditTaskScreen() {
             setSelectedDependentUserId(null);
         } else {
             setApplyToAll(false);
-            setDependent(task.dependent || "Select Dependent");
-            const uid = task.assignedUserIds?.[0];
+            const assigneeIds = collectAssigneeIdsFromTask(task);
+            const uid = assigneeIds[0];
+            const depLabel = task.dependent?.trim() ?? "";
+            const isPlaceholderDep = !depLabel || depLabel.toLowerCase() === "assigned member";
+
             if (typeof uid === "number" && uid > 0) {
-                const match = selectableDependents.find((dep) => (dep.userId ?? dep.dependentId) === uid);
                 setSelectedDependentUserId(uid);
-                if (match) setDependent(match.name);
+                const match = selectableDependents.find((dep) => (dep.userId ?? dep.dependentId) === uid);
+                if (match) {
+                    setDependent(match.name);
+                } else if (!isPlaceholderDep) {
+                    setDependent(depLabel);
+                } else {
+                    setDependent("Select Dependent");
+                }
             } else {
                 setSelectedDependentUserId(null);
+                setDependent(isPlaceholderDep ? "Select Dependent" : depLabel);
             }
         }
 
@@ -131,7 +148,48 @@ export default function EditTaskScreen() {
         setDateInputValue(formatDateYMD(parsedDate));
         setDueTime(parsedTime);
         setTimeInputValue(parsedTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }));
-    }, [task, careSpaces, dependents]);
+    }, [task?.id]);
+
+    useEffect(() => {
+        if (!task || userEditedCareSpaceRef.current) return;
+        if (typeof task.careSpaceId !== "number" || task.careSpaceId <= 0) return;
+        const match = careSpaces.find((cs) => resolveCareSpaceNumericId(cs.id) === task.careSpaceId);
+        if (match) {
+            setSelectedCareSpaceId(task.careSpaceId);
+            setCareSpace(match.title);
+        }
+    }, [task?.id, task?.careSpaceId, careSpaces]);
+
+    useEffect(() => {
+        if (!task || userEditedDependentRef.current) return;
+
+        const allDepsLabel = task.dependent?.trim().toLowerCase() === "all dependents";
+        if (allDepsLabel) {
+            setApplyToAll(true);
+            setDependent("All Dependents");
+            setSelectedDependentUserId(null);
+            return;
+        }
+
+        setApplyToAll(false);
+        const assigneeIds = collectAssigneeIdsFromTask(task);
+        const uid = assigneeIds[0];
+        const depLabel = task.dependent?.trim() ?? "";
+        const isPlaceholderDep = !depLabel || depLabel.toLowerCase() === "assigned member";
+
+        if (typeof uid === "number" && uid > 0) {
+            setSelectedDependentUserId(uid);
+            const match = selectableDependents.find((dep) => (dep.userId ?? dep.dependentId) === uid);
+            if (match) {
+                setDependent(match.name);
+            } else if (!isPlaceholderDep) {
+                setDependent(depLabel);
+            }
+        } else if (!isPlaceholderDep) {
+            setDependent(depLabel);
+            setSelectedDependentUserId(null);
+        }
+    }, [task?.id, task?.dependent, dependents]);
 
     const handleDateChange = (date: Date) => {
         setDueDate(date);
@@ -202,29 +260,21 @@ export default function EditTaskScreen() {
         }
     };
 
-    const isInPast = () => {
-        const now = new Date();
-        const datePart = dueDate;
-        const timePart = dueTime;
-        if (!datePart) return false;
-        const combined = new Date(datePart);
-        combined.setHours(timePart.getHours(), timePart.getMinutes(), 0, 0);
-        return combined.getTime() < now.getTime();
-    };
-
     const toIsoFromDateTime = (date: Date, time: Date) => {
         const merged = new Date(date);
         merged.setHours(time.getHours(), time.getMinutes(), 0, 0);
         return merged.toISOString();
     };
 
+    // Same as add task: allow saving when due date/time is already in the past (editing overdue items).
     const isFormValid = Boolean(
         title.trim() &&
         selectedCareSpaceId &&
-        (applyToAll ? selectableDependents.length > 0 : selectedDependentUserId) &&
+        (applyToAll
+            ? selectableDependents.length > 0
+            : typeof selectedDependentUserId === "number" && selectedDependentUserId > 0) &&
         priority !== "Select Priority" &&
-        dateInputValue.trim() &&
-        !isInPast(),
+        dateInputValue.trim(),
     );
 
     const handleUpdateTask = () => {
@@ -380,8 +430,9 @@ export default function EditTaskScreen() {
                                         }
                                         return (
                                             <Menu.Item
-                                                key={cs.id}
+                                                key={`care-space-menu-${cs.id}`}
                                                 onPress={() => {
+                                                    userEditedCareSpaceRef.current = true;
                                                     setCareSpace(cs.title);
                                                     setSelectedCareSpaceId(numericId);
                                                     setMenuVisible1(false);
@@ -421,8 +472,9 @@ export default function EditTaskScreen() {
                                         }
                                         return (
                                             <Menu.Item
-                                                key={dependent.id}
+                                                key={`dependent-menu-${dependent.id}-${resolvedUserId}`}
                                                 onPress={() => {
+                                                    userEditedDependentRef.current = true;
                                                     setDependent(dependent.name);
                                                     setSelectedDependentUserId(resolvedUserId);
                                                     setMenuVisible2(false);
@@ -437,6 +489,7 @@ export default function EditTaskScreen() {
                                     <Checkbox
                                         status={applyToAll ? "checked" : "unchecked"}
                                         onPress={() => {
+                                            userEditedDependentRef.current = true;
                                             const nextValue = !applyToAll;
                                             setApplyToAll(nextValue);
                                             if (nextValue) {
