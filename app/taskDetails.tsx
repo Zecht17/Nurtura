@@ -4,7 +4,9 @@ import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
 import { useCareSpaces } from "@/context/CareSpacesContext";
-import { useTasks } from "@/context/tasksContext";
+import { useDependents } from "@/context/DependentContext";
+import { type Task, useTasks } from "@/context/tasksContext";
+import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
 import {
     parseCareSpaceNumericIdFromString,
     parseNumericTaskIdForApi,
@@ -21,6 +23,7 @@ import { Alert, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text
 export default function TaskDetails() {
     const { tasks, getTaskDetail, deleteTaskApi } = useTasks();
     const { careSpaces } = useCareSpaces();
+    const { dependents } = useDependents();
     const { id, careSpaceId } = useLocalSearchParams<{ id?: string; careSpaceId?: string }>();
 
     StatusBar.setBarStyle("dark-content");
@@ -110,6 +113,26 @@ export default function TaskDetails() {
         Low: <LowPriorityStatus />,
     } as const;
 
+    const displayDependent = useMemo(() => {
+        if (task) {
+            return resolveDependentDisplayName(task, dependents);
+        }
+        if (taskDetail) {
+            const synthetic: Task = {
+                id: String(id ?? numericTaskId ?? ""),
+                title: taskDetail.title ?? "",
+                dependent: "Assigned Member",
+                description: "",
+                status: "pending",
+                assignments: taskDetail.assignments,
+                completions: taskDetail.completions,
+                schedules: taskDetail.schedules,
+            };
+            return resolveDependentDisplayName(synthetic, dependents);
+        }
+        return "Not set";
+    }, [task, taskDetail, dependents, id, numericTaskId]);
+
     const formatDateTime = (dueDate?: string, dueTime?: string) => {
         if (!dueDate && !dueTime) return "";
         const combined = [dueDate, dueTime].filter(Boolean).join(" ");
@@ -181,7 +204,7 @@ export default function TaskDetails() {
                                 <Ionicons name="person-outline" size={24} color="#6A5ACD" />
                                 <View style={styles.infoTextGroup}>
                                     <Text style={styles.infoLabel}>Dependent</Text>
-                                    <Text style={styles.infoValue}>{task?.dependent || "Not set"}</Text>
+                                    <Text style={styles.infoValue}>{displayDependent}</Text>
                                 </View>
                             </View>
                         </View>
