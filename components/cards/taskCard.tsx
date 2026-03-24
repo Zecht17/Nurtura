@@ -9,6 +9,8 @@ type TaskCardProps = {
     isCompleted?: boolean;
     /** If set, radio calls this instead of onSelect (e.g. open complete confirmation). Omit for selection-only. */
     onRadioPress?: () => void;
+    /** Dependent accounts: view-only — no complete / selection on radio */
+    readOnly?: boolean;
     title: string;
     dependent: string;
     description: string;
@@ -23,6 +25,7 @@ export default function TaskCard({
     onSelect,
     isCompleted = false,
     onRadioPress,
+    readOnly = false,
     title,
     dependent,
     description,
@@ -30,10 +33,11 @@ export default function TaskCard({
     dateTag,
     onPress,
 }: TaskCardProps) {
-    const selectionHighlight = onRadioPress == null && selectedTask === value;
+    const selectionHighlight = !readOnly && onRadioPress == null && selectedTask === value;
     const radioFilled = isCompleted || selectionHighlight;
 
     const handleRadioPress = () => {
+        if (readOnly) return;
         if (onRadioPress) {
             onRadioPress();
         } else {
@@ -43,15 +47,23 @@ export default function TaskCard({
 
     return (
         <Pressable
-            onPress={onPress ?? (() => onSelect(value))}
+            onPress={onPress ?? (readOnly ? undefined : () => onSelect(value))}
             style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
         >
             <View style={styles.radioRow}>
-                <Pressable onPress={handleRadioPress} style={styles.radioWrapper}>
-                    <View style={[styles.customRadio, radioFilled && styles.customRadioSelected]}>
-                        {radioFilled && <View style={styles.customRadioDot} />}
+                {readOnly ? (
+                    <View style={styles.radioWrapper}>
+                        <View style={[styles.customRadio, radioFilled && styles.customRadioSelected]}>
+                            {radioFilled && <View style={styles.customRadioDot} />}
+                        </View>
                     </View>
-                </Pressable>
+                ) : (
+                    <Pressable onPress={handleRadioPress} style={styles.radioWrapper}>
+                        <View style={[styles.customRadio, radioFilled && styles.customRadioSelected]}>
+                            {radioFilled && <View style={styles.customRadioDot} />}
+                        </View>
+                    </Pressable>
+                )}
                 <View style={styles.content}>
                     <Text style={styles.title}>{title}</Text>
                     <Text style={styles.subHeader}>{dependent}</Text>

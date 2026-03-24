@@ -3,10 +3,13 @@ import DeleteTaskModal from "@/components/modals/DeleteTaskModal";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
+import { useAuth } from "@/context/AuthContext";
 import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useDependents } from "@/context/DependentContext";
 import { type Task, useTasks } from "@/context/tasksContext";
-import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
+import { useUser } from "@/context/UserContext";
+import { isDependentRole } from "@/utils/userRole";
+import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
 import {
     parseCareSpaceNumericIdFromString,
     parseNumericTaskIdForApi,
@@ -21,9 +24,19 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 
 export default function TaskDetails() {
+    const { user } = useAuth();
+    const { profileData } = useUser();
     const { tasks, getTaskDetail, deleteTaskApi } = useTasks();
     const { careSpaces } = useCareSpaces();
     const { dependents } = useDependents();
+
+    const isDependentAccount = useMemo(
+        () => isDependentRole(profileData?.role ?? user?.role),
+        [profileData?.role, user?.role],
+    );
+
+    const selfDependentResolution = useMemo(() => selfDependentContextFromProfile(profileData), [profileData]);
+
     const { id, careSpaceId } = useLocalSearchParams<{ id?: string; careSpaceId?: string }>();
 
     StatusBar.setBarStyle("dark-content");
@@ -115,7 +128,7 @@ export default function TaskDetails() {
 
     const displayDependent = useMemo(() => {
         if (task) {
-            return resolveDependentDisplayName(task, dependents);
+            return resolveDependentDisplayName(task, dependents, selfDependentResolution);
         }
         if (taskDetail) {
             const synthetic: Task = {
@@ -128,10 +141,10 @@ export default function TaskDetails() {
                 completions: taskDetail.completions,
                 schedules: taskDetail.schedules,
             };
-            return resolveDependentDisplayName(synthetic, dependents);
+            return resolveDependentDisplayName(synthetic, dependents, selfDependentResolution);
         }
         return "Not set";
-    }, [task, taskDetail, dependents, id, numericTaskId]);
+    }, [task, taskDetail, dependents, id, numericTaskId, selfDependentResolution]);
 
     const formatDateTime = (dueDate?: string, dueTime?: string) => {
         if (!dueDate && !dueTime) return "";
@@ -165,19 +178,23 @@ export default function TaskDetails() {
                         </Pressable>
                         <View style={{ flex: 1, marginLeft: 15 }}>
                             <Text style={styles.headerTitle}>Task Details</Text>
-                            <Text style={styles.subHeader}>View and manage this task</Text>
+                            <Text style={styles.subHeader}>
+                                {isDependentAccount ? "View this task" : "View and manage this task"}
+                            </Text>
                         </View>
-                        <EditTaskButton
-                            onPress={() =>
-                                router.push({
-                                    pathname: "/editTaskPage",
-                                    params: {
-                                        id: task?.id || (numericTaskId ? String(numericTaskId) : undefined),
-                                        careSpaceId: numericCareSpaceId ? String(numericCareSpaceId) : undefined,
-                                    },
-                                })
-                            }
-                        />
+                        {!isDependentAccount && (
+                            <EditTaskButton
+                                onPress={() =>
+                                    router.push({
+                                        pathname: "/editTaskPage",
+                                        params: {
+                                            id: task?.id || (numericTaskId ? String(numericTaskId) : undefined),
+                                            careSpaceId: numericCareSpaceId ? String(numericCareSpaceId) : undefined,
+                                        },
+                                    })
+                                }
+                            />
+                        )}
                     </View>
 
                     {/* This is for the card that contains the title of the task, category, and status */}
@@ -252,33 +269,37 @@ export default function TaskDetails() {
                         </View>
                     </View>
 
-                    <View style={styles.dangerCard}>
-                        <Text style={styles.dangerTitle}>Delete Task</Text>
-                        <Text style={styles.dangerCopy}>Permanently remove this task. This action cannot be undone.</Text>
-                        <Pressable style={styles.deleteButton} onPress={() => setShowDeleteModal(true)}>
-                            <AntDesign name="delete" size={16} color="#ffffff" />
-                            <Text style={styles.deleteButtonText}>Delete Task</Text>
-                        </Pressable>
-                    </View>
-                    <DeleteTaskModal
-                        visible={showDeleteModal}
-                        taskTitle={displayTitle}
-                        onConfirm={async () => {
-                            if (!numericTaskId || !numericCareSpaceId) {
-                                Alert.alert("Delete failed", "Unable to resolve task or care space ID.");
-                                return;
-                            }
+                    {!isDependentAccount && (
+                        <>
+                            <View style={styles.dangerCard}>
+                                <Text style={styles.dangerTitle}>Delete Task</Text>
+                                <Text style={styles.dangerCopy}>Permanently remove this task. This action cannot be undone.</Text>
+                                <Pressable style={styles.deleteButton} onPress={() => setShowDeleteModal(true)}>
+                                    <AntDesign name="delete" size={16} color="#ffffff" />
+                                    <Text style={styles.deleteButtonText}>Delete Task</Text>
+                                </Pressable>
+                            </View>
+                            <DeleteTaskModal
+                                visible={showDeleteModal}
+                                taskTitle={displayTitle}
+                                onConfirm={async () => {
+                                    if (!numericTaskId || !numericCareSpaceId) {
+                                        Alert.alert("Delete failed", "Unable to resolve task or care space ID.");
+                                        return;
+                                    }
 
-                            try {
-                                await deleteTaskApi(numericTaskId, numericCareSpaceId);
-                                setShowDeleteModal(false);
-                                router.back();
-                            } catch (error) {
-                                Alert.alert("Delete failed", error instanceof Error ? error.message : "Unable to delete task.");
-                            }
-                        }}
-                        onCancel={() => setShowDeleteModal(false)}
-                    />
+                                    try {
+                                        await deleteTaskApi(numericTaskId, numericCareSpaceId);
+                                        setShowDeleteModal(false);
+                                        router.back();
+                                    } catch (error) {
+                                        Alert.alert("Delete failed", error instanceof Error ? error.message : "Unable to delete task.");
+                                    }
+                                }}
+                                onCancel={() => setShowDeleteModal(false)}
+                            />
+                        </>
+                    )}
                 </SafeAreaView>
             </ScrollView>
         </LinearGradient>

@@ -12,7 +12,8 @@ import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
 import { useDependents } from "@/context/DependentContext";
 import { useTasks } from "@/context/tasksContext";
-import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
+import { useUser } from "@/context/UserContext";
+import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
 import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
 import Ionicicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -27,7 +28,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function CalendarScreen() {
     const router = useRouter();
     const { dependents } = useDependents();
+    const { profileData } = useUser();
     const { tasks, completeTaskAsUser, listMyTasks, listCreatedByMeTasks } = useTasks();
+    const selfDependentResolution = useMemo(() => selfDependentContextFromProfile(profileData), [profileData]);
     const [selectedTask, setSelectedTask] = useState<string | null>(null);
     const [pendingCompleteId, setPendingCompleteId] = useState<string | null>(null);
     const [completing, setCompleting] = useState(false);
@@ -257,7 +260,7 @@ export default function CalendarScreen() {
                                             : undefined
                                     }
                                     title={task.title}
-                                    dependent={resolveDependentDisplayName(task, dependents)}
+                                    dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution)}
                                     description={task.description}
                                     statusTags={
                                         <>

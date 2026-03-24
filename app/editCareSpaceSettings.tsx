@@ -15,7 +15,8 @@ import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
 import { useDependents } from "@/context/DependentContext";
 import { useTasks } from "@/context/tasksContext";
-import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
+import { useUser } from "@/context/UserContext";
+import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
 import { resolveTaskCareSpaceId } from "@/utils/resolveTaskCareSpaceId";
 import { Feather } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
@@ -24,7 +25,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -35,6 +36,8 @@ export default function EditCareSpaceSettings() {
     const [nowMs, setNowMs] = useState(Date.now());
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const { dependents } = useDependents();
+    const { profileData } = useUser();
+    const selfDependentResolution = useMemo(() => selfDependentContextFromProfile(profileData), [profileData]);
     const { tasks, deleteTaskApi } = useTasks();
 
     StatusBar.setBarStyle("dark-content");
@@ -317,7 +320,7 @@ export default function EditCareSpaceSettings() {
                                             selectedTask={selectedTask}
                                             onSelect={setSelectedTask}
                                             title={task.title}
-                                            dependent={resolveDependentDisplayName(task, dependents)}
+                                            dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution)}
                                             description={task.description}
                                             statusTags={
                                                 <>

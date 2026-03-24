@@ -17,6 +17,8 @@ type TaskCardProps = {
     onEdit?: () => void;
     onPress?: () => void;
     onDelete?: () => void;
+    /** Family / caregiver: show edit, delete, complete. Dependents: view-only. */
+    editable?: boolean;
 };
 
 export default function EditableTaskCard({
@@ -33,11 +35,13 @@ export default function EditableTaskCard({
     onEdit,
     onPress,
     onDelete,
+    editable = true,
 }: TaskCardProps) {
-    const selectionHighlight = onRadioPress == null && selectedTask === value;
+    const selectionHighlight = editable && onRadioPress == null && selectedTask === value;
     const radioFilled = isCompleted || selectionHighlight;
 
     const handleRadioPress = () => {
+        if (!editable) return;
         if (onRadioPress) {
             onRadioPress();
         } else {
@@ -47,26 +51,36 @@ export default function EditableTaskCard({
 
     return (
         <Pressable
-            onPress={onPress ?? (() => onSelect(value))}
+            onPress={onPress ?? (editable ? () => onSelect(value) : undefined)}
             style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
         >
             <View style={styles.radioRow}>
-                <Pressable onPress={handleRadioPress} style={styles.radioWrapper}>
-                    <View style={[styles.customRadio, radioFilled && styles.customRadioSelected]}>
-                        {radioFilled && <View style={styles.customRadioDot} />}
+                {editable ? (
+                    <Pressable onPress={handleRadioPress} style={styles.radioWrapper}>
+                        <View style={[styles.customRadio, radioFilled && styles.customRadioSelected]}>
+                            {radioFilled && <View style={styles.customRadioDot} />}
+                        </View>
+                    </Pressable>
+                ) : (
+                    <View style={styles.radioWrapper}>
+                        <View style={[styles.customRadio, radioFilled && styles.customRadioSelected]}>
+                            {radioFilled && <View style={styles.customRadioDot} />}
+                        </View>
                     </View>
-                </Pressable>
+                )}
                 <View style={styles.content}>
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                         <Text style={styles.title}>{title}</Text>
-                        <View style={{ flexDirection: "row", gap: 10 }}>
-                            <Pressable onPress={onEdit} hitSlop={8}>
-                                <MaterialCommunityIcons name="pencil-outline" size={21} color="#000000" />
-                            </Pressable>
-                            <Pressable onPress={onDelete} hitSlop={8}>
-                                <Ionicons name="trash" size={21} color="red" />
-                            </Pressable>
-                        </View>
+                        {editable ? (
+                            <View style={{ flexDirection: "row", gap: 10 }}>
+                                <Pressable onPress={onEdit} hitSlop={8}>
+                                    <MaterialCommunityIcons name="pencil-outline" size={21} color="#000000" />
+                                </Pressable>
+                                <Pressable onPress={onDelete} hitSlop={8}>
+                                    <Ionicons name="trash" size={21} color="red" />
+                                </Pressable>
+                            </View>
+                        ) : null}
                     </View>
                     <Text style={styles.subHeader}>{dependent}</Text>
                     <Text style={styles.subHeader}>{description}</Text>

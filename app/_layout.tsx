@@ -93,6 +93,7 @@ export default function RootLayout() {
                         <Stack.Screen name="addDependent" options={{ headerShown: false }} />
                         <Stack.Screen name="editDependent" options={{ headerShown: false }} />
                         <Stack.Screen name="dependentAccount" options={{ headerShown: false }} />
+                        <Stack.Screen name="emergencyAlertPage" options={{ headerShown: false }} />
                       </Stack>
                     </RouteGuard>
                   </PaperProvider>

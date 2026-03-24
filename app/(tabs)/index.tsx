@@ -1,3 +1,4 @@
+import EmergencyAlert from "@/components/buttons/dependentSide/emergencyAlert";
 import CompleteTaskModal from "@/components/modals/CompleteTaskModal";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
@@ -8,12 +9,13 @@ import MissedStatus from "@/components/tags/status/missed";
 import { useAuth } from "@/context/AuthContext";
 import { useDependents } from "@/context/DependentContext";
 import { useTasks } from "@/context/tasksContext";
-import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
+import { useUser } from "@/context/UserContext";
+import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
+import { isDependentRole } from "@/utils/userRole";
 import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
-import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View, } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -62,7 +64,15 @@ function isDueInSelectedRange(due: Date | null, range: TaskRange, now: Date): bo
 }
 
 export default function Index() {
-  const { user } = useAuth(); // TODO: Get from user context or auth
+  const { user } = useAuth();
+  const { profileData } = useUser();
+
+  const isDependentAccount = useMemo(
+    () => isDependentRole(profileData?.role ?? user?.role),
+    [profileData?.role, user?.role],
+  );
+
+  const selfDependentResolution = useMemo(() => selfDependentContextFromProfile(profileData), [profileData]);
 
   const [range, setRange] = useState<TaskRange>("Today");
   const [menuVisible, setMenuVisible] = useState(false);
@@ -204,7 +214,13 @@ export default function Index() {
 
   return (
     <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]}>
-    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.scrollContent,
+        isDependentAccount && styles.scrollContentDependent,
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       <SafeAreaView>
         <View>
           {/* <View style={styles.view}>
@@ -218,16 +234,27 @@ export default function Index() {
             <Text style={styles.subHeader}>{overviewSubheader}</Text>
           </View>
 
-          {/* This the Summary Components */}
-          <View style={styles.summaryContainer}>
+          {/* Week summary dashboard — all roles */}
+          <View
+            style={[
+              styles.summaryContainer,
+              isDependentAccount && styles.summaryContainerBeforeEmergency,
+            ]}
+          >
             <WeekSummaryCard filter={dashboardFilter} nowMs={nowMs} />
           </View>
-          
-          {/* This is for the Today's Tasks and Dependents */}
-          <View style={styles.cardsRow}>
-            <TodayTasksCard nowMs={nowMs} />
-            <DependentsCard />
-          </View>
+
+          {/* Dependent: Emergency Alert. Family member / caregiver: Today + Dependents snapshot cards. */}
+          {!isDependentAccount ? (
+            <View style={styles.cardsRow}>
+              <TodayTasksCard nowMs={nowMs} />
+              <DependentsCard />
+            </View>
+          ) : (
+            <View style={styles.dependentEmergencyWrap}>
+              <EmergencyAlert />
+            </View>
+          )}
 
           {/* This is for the  Task row, dropdown, and add button */}
           <View style={styles.taskOptions}>
@@ -258,7 +285,7 @@ export default function Index() {
                 <Menu.Item onPress={() => { setRange("This Week"); setMenuVisible(false); }} title="This Week" titleStyle={styles.dropdownItemText} />
                 <Menu.Item onPress={() => { setRange("This Month"); setMenuVisible(false); }} title="This Month" titleStyle={styles.dropdownItemText} />
               </Menu>
-              <AddTaskShort />
+              {!isDependentAccount && <AddTaskShort />}
             </View>
           </View>
           
@@ -269,7 +296,11 @@ export default function Index() {
             ) : filteredAndSortedTasks.length === 0 ? (
               <NoPendingTask
                 title={emptyRangeMessage}
-                subtitle="Try another range or add a task with a due date."
+                subtitle={
+                  isDependentAccount
+                    ? "Try another range."
+                    : "Try another range or add a task with a due date."
+                }
               />
             ) : (
               filteredAndSortedTasks.map((task) => (
@@ -278,14 +309,15 @@ export default function Index() {
                   value={task.id}
                   selectedTask={selectedTask}
                   onSelect={setSelectedTask}
+                  readOnly={isDependentAccount}
                   isCompleted={task.computedStatus === "completed"}
                   onRadioPress={
-                    task.computedStatus !== "completed"
-                      ? () => setPendingCompleteId(task.id)
-                      : undefined
+                    isDependentAccount || task.computedStatus === "completed"
+                      ? undefined
+                      : () => setPendingCompleteId(task.id)
                   }
                   title={task.title}
-                  dependent={resolveDependentDisplayName(task, dependents)}
+                  dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution)}
                   description={task.description}
                   statusTags={
                     <>
@@ -366,6 +398,11 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  /** Dependent home has fewer cards; avoid vertically centering content (large gap under header). */
+  scrollContentDependent: {
+    justifyContent: "flex-start",
+  },
+
   view: {
     flexDirection: "row",
     justifyContent: "center",
@@ -393,6 +430,17 @@ export const styles = StyleSheet.create({
     marginTop: 0,
     padding: 20,
     borderRadius: 24,
+  },
+
+  /** Dependent: less padding below week summary so gap to Emergency Alert matches card→card rhythm (~16–20px). */
+  summaryContainerBeforeEmergency: {
+    paddingBottom: 8,
+  },
+
+  dependentEmergencyWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 12,
   },
 
   cardsRow: {

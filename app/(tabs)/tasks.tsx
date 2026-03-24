@@ -14,17 +14,20 @@ import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
-import { resolveDependentDisplayName } from "@/utils/resolveDependentDisplayName";
+import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
 import {
     parseCareSpaceNumericIdFromString,
     parseNumericTaskIdForApi,
     resolveTaskCareSpaceId,
 } from "@/utils/resolveTaskCareSpaceId";
+import { collectAssigneeIdsFromTask } from "@/utils/taskAssigneeIds";
 import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
+import { useAuth } from "@/context/AuthContext";
 import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useDependents } from "@/context/DependentContext";
 import { useTasks } from "@/context/tasksContext";
 import { useUser } from "@/context/UserContext";
+import { isDependentRole } from "@/utils/userRole";
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from "expo-linear-gradient";
@@ -40,6 +43,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export default function TaskScreen() {
     const router = useRouter();
+    const { user } = useAuth();
     const { careSpaces } = useCareSpaces();
     const { dependents } = useDependents();
     const { profileData } = useUser();
@@ -69,6 +73,13 @@ export default function TaskScreen() {
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [pendingCompleteId, setPendingCompleteId] = useState<string | null>(null);
     const [completing, setCompleting] = useState(false);
+
+    const isDependentAccount = useMemo(
+        () => isDependentRole(profileData?.role ?? user?.role),
+        [profileData?.role, user?.role],
+    );
+
+    const selfDependentResolution = useMemo(() => selfDependentContextFromProfile(profileData), [profileData]);
 
     const fallbackSingleCareSpaceNumericId = useMemo(() => {
         if (careSpaces.length !== 1) return null;
@@ -202,13 +213,20 @@ export default function TaskScreen() {
                 /** Local row from createTask (TasksProvider) until lists return full assignment metadata */
                 const iCreatedOptimistic = task.clientCreatedAt != null;
                 const isCreator = iCreated || iCreatedOptimistic;
-                const assignedToMe = task.assignedUserIds?.includes(currentUserId) ?? false;
-                if (task.assignedUserIds && task.assignedUserIds.length > 0) {
+                const assigneeIds = collectAssigneeIdsFromTask(task);
+                const assignedToMe =
+                    (task.assignedUserIds?.includes(currentUserId) ?? false) || assigneeIds.includes(currentUserId);
+                const hasAssigneeHint =
+                    (task.assignedUserIds && task.assignedUserIds.length > 0) || assigneeIds.length > 0;
+                if (hasAssigneeHint) {
                     if (!assignedToMe && !isCreator) {
                         return false;
                     }
                 } else if (task.assignedByUserId != null && !isCreator) {
-                    return false;
+                    /** Dependent: list payloads often only set `assigned_by` (caregiver); `/tasks/me` still scopes to their tasks. */
+                    if (!isDependentAccount) {
+                        return false;
+                    }
                 }
             } else if (selectedAssignee === "createdByMe") {
                 if (task.assignedByUserId != null && task.assignedByUserId !== currentUserId) {
@@ -325,7 +343,7 @@ export default function TaskScreen() {
                             <Text style={styles.headerTitle}>Tasks</Text>
                             <Text style={styles.subHeader}>Manage caregiving activities</Text>
                         </View>
-                        <AddTaskButton />
+                        {!isDependentAccount && <AddTaskButton />}
                     </View>
                     
                     {/* Search Bar */}
@@ -487,14 +505,17 @@ export default function TaskScreen() {
                                     value={task.id}
                                     selectedTask={null}
                                     onSelect={() => {}}
+                                    editable={!isDependentAccount}
                                     isCompleted={task.computedStatus === "completed"}
                                     onRadioPress={
-                                        task.computedStatus !== "completed"
-                                            ? () => setPendingCompleteId(task.id)
-                                            : undefined
+                                        isDependentAccount
+                                            ? undefined
+                                            : task.computedStatus !== "completed"
+                                              ? () => setPendingCompleteId(task.id)
+                                              : undefined
                                     }
                                     title={task.title}
-                                    dependent={resolveDependentDisplayName(task, dependents)}
+                                    dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution)}
                                     description={task.description}
                                     statusTags={
                                         <>

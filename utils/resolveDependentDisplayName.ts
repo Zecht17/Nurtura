@@ -2,6 +2,35 @@ import type { Dependent } from "@/context/DependentContext";
 import type { Task } from "@/context/tasksContext";
 import { collectAssigneeIdsFromTask, toPositiveInt } from "@/utils/taskAssigneeIds";
 
+/** Logged-in user (e.g. dependent) — used when `/dependent-profiles/me/dependents` is empty. */
+export type SelfDependentResolution = {
+    userId: number;
+    displayName: string;
+};
+
+export function selfDependentContextFromProfile(
+    profile:
+        | {
+              user_id: number;
+              first_name: string;
+              middle_name?: string;
+              last_name: string;
+          }
+        | null
+        | undefined,
+): SelfDependentResolution | null {
+    if (!profile || typeof profile.user_id !== "number" || !Number.isFinite(profile.user_id) || profile.user_id <= 0) {
+        return null;
+    }
+    const displayName = [profile.first_name, profile.middle_name, profile.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!displayName) return null;
+    return { userId: profile.user_id, displayName };
+}
+
 function firstNameFromAssignmentRows(assignments: any[] | undefined): string | undefined {
     if (!Array.isArray(assignments)) return undefined;
     for (const a of assignments) {
@@ -52,11 +81,26 @@ function dependentMatchesAssigneeId(d: Dependent, uid: number): boolean {
     return false;
 }
 
+function hasAssigneeStructure(task: Task): boolean {
+    return Boolean(
+        (task.assignedUserIds && task.assignedUserIds.length > 0) ||
+            (Array.isArray(task.assignments) && task.assignments.length > 0) ||
+            (Array.isArray(task.completions) && task.completions.length > 0),
+    );
+}
+
 /**
  * Prefer a real assignee name when the task payload only had placeholders
  * (e.g. API returns assignments with user_id but no nested `user` object).
+ *
+ * @param self — When set (from `/users/me`), tasks assigned to this user_id resolve to the profile name.
+ *              Needed for `dependent` logins because `dependent-profiles/me/dependents` is empty for them.
  */
-export function resolveDependentDisplayName(task: Task, dependents: Dependent[]): string {
+export function resolveDependentDisplayName(
+    task: Task,
+    dependents: Dependent[],
+    self?: SelfDependentResolution | null,
+): string {
     const raw = (task.dependent ?? "").trim();
     if (raw && raw !== "Assigned Member") {
         return raw;
@@ -68,6 +112,22 @@ export function resolveDependentDisplayName(task: Task, dependents: Dependent[])
     }
 
     const candidateIds = collectAssigneeIdsFromTask(task);
+
+    if (self) {
+        if (candidateIds.includes(self.userId)) {
+            return self.displayName;
+        }
+        const isPlaceholder = !raw || raw === "Assigned Member";
+        if (
+            isPlaceholder &&
+            dependents.length === 0 &&
+            candidateIds.length === 0 &&
+            hasAssigneeStructure(task)
+        ) {
+            return self.displayName;
+        }
+    }
+
     for (const uid of candidateIds) {
         const match = dependents.find((d) => dependentMatchesAssigneeId(d, uid));
         if (match?.name?.trim()) {
@@ -75,18 +135,12 @@ export function resolveDependentDisplayName(task: Task, dependents: Dependent[])
         }
     }
 
-    // Single-dependent households: list payloads sometimes omit ids we can match; if the task clearly
-    // has assignee rows/ids but resolution failed, show the only dependent rather than a placeholder.
     const isPlaceholder = !raw || raw === "Assigned Member";
     if (isPlaceholder && dependents.length === 1) {
         const only = dependents[0];
         const name = only?.name?.trim();
         if (name) {
-            const hasAssigneeStructure =
-                (task.assignedUserIds && task.assignedUserIds.length > 0) ||
-                (Array.isArray(task.assignments) && task.assignments.length > 0) ||
-                (Array.isArray(task.completions) && task.completions.length > 0);
-            if (hasAssigneeStructure) {
+            if (hasAssigneeStructure(task)) {
                 return name;
             }
         }
