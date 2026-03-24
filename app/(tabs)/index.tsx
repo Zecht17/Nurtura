@@ -7,10 +7,12 @@ import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import { useAuth } from "@/context/AuthContext";
+import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useDependents } from "@/context/DependentContext";
 import { useTasks } from "@/context/tasksContext";
 import { useUser } from "@/context/UserContext";
 import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
+import { parseCareSpaceNumericIdFromString } from "@/utils/resolveTaskCareSpaceId";
 import { isDependentRole } from "@/utils/userRole";
 import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
 import { LinearGradient } from "expo-linear-gradient";
@@ -81,8 +83,21 @@ export default function Index() {
   const [completing, setCompleting] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const { dependents } = useDependents();
+  const { careSpaces } = useCareSpaces();
   const { tasks, completeTaskAsUser, listMyTasks, listCreatedByMeTasks } = useTasks();
   StatusBar.setBarStyle("dark-content");
+
+  /** Only tasks in care spaces the user belongs to (avoids stale rows from another account/session). */
+  const tasksVisibleOnHome = useMemo(() => {
+    const numericIds = careSpaces
+      .map((cs) => parseCareSpaceNumericIdFromString(cs.id))
+      .filter((n): n is number => typeof n === "number" && n > 0);
+    if (numericIds.length === 0) return tasks;
+    return tasks.filter((task) => {
+      if (task.careSpaceId == null) return true;
+      return numericIds.includes(task.careSpaceId);
+    });
+  }, [tasks, careSpaces]);
 
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
@@ -110,7 +125,7 @@ export default function Index() {
 
   const filteredAndSortedTasks = useMemo(() => {
     const now = new Date(nowMs);
-    const decorated = tasks.map((task) => {
+    const decorated = tasksVisibleOnHome.map((task) => {
       const due = parseLocalDueDateTime(task.dueDate, task.dueTime);
       const computedStatus = computeComputedTaskStatus(task.status, due, nowMs);
       return { ...task, computedStatus };
@@ -131,7 +146,7 @@ export default function Index() {
     });
 
     return inRange;
-  }, [tasks, nowMs, range]);
+  }, [tasksVisibleOnHome, nowMs, range]);
 
   const dashboardFilter =
     range === "Today" ? "today" : range === "This Week" ? "week" : "month";
@@ -241,13 +256,13 @@ export default function Index() {
               isDependentAccount && styles.summaryContainerBeforeEmergency,
             ]}
           >
-            <WeekSummaryCard filter={dashboardFilter} nowMs={nowMs} />
+            <WeekSummaryCard filter={dashboardFilter} nowMs={nowMs} tasks={tasksVisibleOnHome} />
           </View>
 
           {/* Dependent: Emergency Alert. Family member / caregiver: Today + Dependents snapshot cards. */}
           {!isDependentAccount ? (
             <View style={styles.cardsRow}>
-              <TodayTasksCard nowMs={nowMs} />
+              <TodayTasksCard nowMs={nowMs} tasks={tasksVisibleOnHome} />
               <DependentsCard />
             </View>
           ) : (
@@ -291,7 +306,7 @@ export default function Index() {
           
           {/* This is the Task Card */}
           <View style={styles.taskCardContainer}>
-            {tasks.length === 0 ? (
+            {tasksVisibleOnHome.length === 0 ? (
               <NoPendingTask />
             ) : filteredAndSortedTasks.length === 0 ? (
               <NoPendingTask

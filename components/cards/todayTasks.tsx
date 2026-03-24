@@ -1,3 +1,4 @@
+import type { Task } from "@/context/tasksContext";
 import { useTasks } from "@/context/tasksContext";
 import { computeDashboardMetricsFromTasks } from "@/utils/dashboardFromTasks";
 import Feather from "@expo/vector-icons/Feather";
@@ -7,10 +8,12 @@ import { StyleSheet, Text, View } from "react-native";
 
 type Props = {
   nowMs: number;
+  tasks?: Task[];
 };
 
-export default function TodayTasksCard({ nowMs }: Props) {
-  const { tasks } = useTasks();
+export default function TodayTasksCard({ nowMs, tasks: tasksProp }: Props) {
+  const { tasks: tasksFromContext } = useTasks();
+  const tasks = tasksProp ?? tasksFromContext;
 
   const mainCount = useMemo(() => {
     const { totalTasks } = computeDashboardMetricsFromTasks(tasks, "today", nowMs);

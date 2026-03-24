@@ -6,6 +6,7 @@ import { Pressable, Text, View } from "react-native";
 type RoleLabel = "Owner" | "Editor" | "Viewer";
 
 type PersonWithRole = {
+    memberId?: number;
     initial: string;
     name: string;
     role: RoleLabel;
@@ -50,8 +51,8 @@ export default function CareContainerCard({
             </View>
 
             <View style={styles.familyList}>
-                {familyMembers.map((member) => (
-                    <View key={`family-${member.name}`} style={styles.caregiverNameRow}>
+                {familyMembers.map((member, index) => (
+                    <View key={`family-${member.memberId ?? `i-${index}`}`} style={styles.caregiverNameRow}>
                         <View style={styles.caregiverItem}><Text style={styles.careGiverIcon}>{member.initial}</Text></View>
                         <View style={{ flexDirection: "column", alignItems: "flex-start", justifyContent: "flex-start" }}>
                             <View style={styles.caregiverNameRow}>
@@ -69,8 +70,8 @@ export default function CareContainerCard({
             </View>
 
             <View style={styles.caregiverList}>
-                {caregivers.map((caregiver) => (
-                    <View key={`caregiver-${caregiver.name}`} style={styles.caregiverNameRow}>
+                {caregivers.map((caregiver, index) => (
+                    <View key={`caregiver-${caregiver.memberId ?? `i-${index}`}`} style={styles.caregiverNameRow}>
                         <View style={styles.caregiverItem}><Text style={styles.careGiverIcon}>{caregiver.initial}</Text></View>
                         <View style={{ flexDirection: "column", alignItems: "flex-start", justifyContent: "flex-start" }}>
                             <View style={styles.caregiverNameRow}>
@@ -100,8 +101,8 @@ export default function CareContainerCard({
             </View>
 
             <View style={styles.memberList}>
-                {dependents.map((dependent) => (
-                    <View key={`dependent-${dependent.name}`} style={styles.memberNameRow}>
+                {dependents.map((dependent, index) => (
+                    <View key={`dependent-${index}`} style={styles.memberNameRow}>
                         <View style={styles.memberItem}><Text style={styles.memberIcon}>{dependent.initial}</Text></View>
                         <Text style={styles.memberName}>{dependent.name}</Text>
                     </View>

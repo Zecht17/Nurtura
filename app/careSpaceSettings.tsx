@@ -197,11 +197,12 @@ export default function CareSpaceSettings() {
         setShowManageAccessModal(true);
     };
 
-    const renderMemberCard = (member: PersonWithRole, keyPrefix: string) => {
+    const renderMemberCard = (member: PersonWithRole, keyPrefix: string, index: number) => {
+        const memberKey = `${keyPrefix}-${member.memberId ?? `i-${index}`}`;
         if (member.role === "Owner") {
             return (
                 <OwnerRoleCard
-                    key={`${keyPrefix}-${member.name}`}
+                    key={memberKey}
                     name={member.name}
                     initial={member.initial}
                 />
@@ -211,7 +212,7 @@ export default function CareSpaceSettings() {
         if (member.role === "Editor") {
             return (
                 <EditorRoleCard
-                    key={`${keyPrefix}-${member.name}`}
+                    key={memberKey}
                     name={member.name}
                     initial={member.initial}
                     onPress={() => openManageAccess(member)}
@@ -221,7 +222,7 @@ export default function CareSpaceSettings() {
 
         return (
             <ViewerRoleCard
-                key={`${keyPrefix}-${member.name}`}
+                key={memberKey}
                 name={member.name}
                 initial={member.initial}
                 onPress={() => openManageAccess(member)}
@@ -400,7 +401,7 @@ export default function CareSpaceSettings() {
                             </View>
                         </View>
 
-                        {familyMembers.map((member) => renderMemberCard(member, "family"))}
+                        {familyMembers.map((member, index) => renderMemberCard(member, "family", index))}
                     </View>
 
                     {/* This is for the Caregiver card container */}
@@ -413,7 +414,7 @@ export default function CareSpaceSettings() {
                             </View>
                         </View>
 
-                        {caregivers.map((caregiver) => renderMemberCard(caregiver, "caregiver"))}
+                        {caregivers.map((caregiver, index) => renderMemberCard(caregiver, "caregiver", index))}
                     </View>
 
                     {/* This is for the Dependent card container */}
@@ -434,9 +435,9 @@ export default function CareSpaceSettings() {
                         </View>
 
                         {/* This is for the Dependent Details */}
-                        {dependentNames.map((name) => (
+                        {dependentNames.map((name, index) => (
                             <ViewerRoleCard
-                                key={`dependent-${name}`}
+                                key={`dependent-${index}`}
                                 name={name}
                                 initial={getInitial(name)}
                                 dependentStyle

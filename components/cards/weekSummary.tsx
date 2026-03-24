@@ -1,3 +1,4 @@
+import type { Task } from "@/context/tasksContext";
 import { useTasks } from "@/context/tasksContext";
 import type { DashboardTimeFilter } from "@/utils/dashboardFromTasks";
 import { computeDashboardMetricsFromTasks } from "@/utils/dashboardFromTasks";
@@ -16,10 +17,13 @@ type Props = {
   filter: DashboardTimeFilter;
   /** Same clock as Home task list (`computeComputedTaskStatus` / overdue). */
   nowMs: number;
+  /** When set (e.g. Home scope), metrics match that list instead of all tasks in context. */
+  tasks?: Task[];
 };
 
-export default function WeekSummaryCard({ filter, nowMs }: Props) {
-  const { tasks } = useTasks();
+export default function WeekSummaryCard({ filter, nowMs, tasks: tasksProp }: Props) {
+  const { tasks: tasksFromContext } = useTasks();
+  const tasks = tasksProp ?? tasksFromContext;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   const metrics = useMemo(

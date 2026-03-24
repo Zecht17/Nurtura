@@ -111,6 +111,11 @@ export function resolveDependentDisplayName(
         return fromAssignments;
     }
 
+    const fromCompletions = firstNameFromAssignmentRows(task.completions);
+    if (fromCompletions) {
+        return fromCompletions;
+    }
+
     const candidateIds = collectAssigneeIdsFromTask(task);
 
     if (self) {

@@ -81,6 +81,17 @@ export default function TaskScreen() {
 
     const selfDependentResolution = useMemo(() => selfDependentContextFromProfile(profileData), [profileData]);
 
+    const tasksInUserCareSpaces = useMemo(() => {
+        const numericIds = careSpaces
+            .map((cs) => parseCareSpaceNumericIdFromString(cs.id))
+            .filter((n): n is number => typeof n === "number" && n > 0);
+        if (numericIds.length === 0) return tasks;
+        return tasks.filter((task) => {
+            if (task.careSpaceId == null) return true;
+            return numericIds.includes(task.careSpaceId);
+        });
+    }, [tasks, careSpaces]);
+
     const fallbackSingleCareSpaceNumericId = useMemo(() => {
         if (careSpaces.length !== 1) return null;
         const n = parseCareSpaceNumericIdFromString(careSpaces[0].id);
@@ -185,7 +196,7 @@ export default function TaskScreen() {
         // after every fetch (setTasks) and keep "Loading tasks..." stuck on screen.
         // eslint-disable-next-line react-hooks/exhaustive-deps -- list* from context intentionally omitted
     }, [selectedAssignee, selectedCareSpaceId, selectedStatus]);
-    const decoratedTasks = tasks.map((task) => {
+    const decoratedTasks = tasksInUserCareSpaces.map((task) => {
         const due = parseLocalDueDateTime(task.dueDate, task.dueTime);
         const computedStatus = computeComputedTaskStatus(task.status, due, nowMs);
         return { ...task, computedStatus };

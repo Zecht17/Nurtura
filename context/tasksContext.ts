@@ -123,6 +123,21 @@ export function TasksProvider({ children }: { children: ReactNode }) {
 
     const listMyTasksRef = useRef<((filters?: TaskListFilters) => Promise<Task[]>) | null>(null);
     const listCreatedByMeTasksRef = useRef<((filters?: TaskListFilters) => Promise<Task[]>) | null>(null);
+    const sessionUsernameRef = useRef<string | null>(null);
+
+    /** Drop stale rows when logging out or switching accounts (merge/preserve must not carry over sessions). */
+    useEffect(() => {
+        if (!user?.access_token) {
+            setTasks([]);
+            sessionUsernameRef.current = null;
+            return;
+        }
+        const uname = user.username ?? "";
+        if (sessionUsernameRef.current !== null && sessionUsernameRef.current !== uname) {
+            setTasks([]);
+        }
+        sessionUsernameRef.current = uname;
+    }, [user?.access_token, user?.username]);
 
     const addTask = (task: Task) => {
         setTasks((prev) => [...prev, task]);
