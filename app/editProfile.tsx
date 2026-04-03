@@ -169,7 +169,7 @@ export default function EditProfileScreen() {
     return (
         <LinearGradient colors={['#E3F2FD', '#F3E5F8', '#E8E4F8']} style={styles.gradient}>
             <SafeAreaView style={styles.container}>
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                         <View style={styles.headerContainer}>
                             <Pressable onPress={() => router.back()} hitSlop={12}>

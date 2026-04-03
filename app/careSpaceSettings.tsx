@@ -17,22 +17,11 @@ import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
+import { useAuth } from "@/context/AuthContext";
 import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useDependents } from "@/context/DependentContext";
-import { useTasks } from "@/context/tasksContext";
+import { type Task, useTasks } from "@/context/tasksContext";
 import { useUser } from "@/context/UserContext";
-import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
-import { Feather } from "@expo/vector-icons";
-import AntDesign from "@expo/vector-icons/AntDesign";
-import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
-import { ScrollView } from "react-native-gesture-handler";
-import { SafeAreaView } from "react-native-safe-area-context";
 import {
     CareSpaceTask,
     PersonWithRole,
@@ -42,6 +31,19 @@ import {
     parseDependentNames,
     parsePeopleWithRole,
 } from "@/utils/careSpaceSettings.utils";
+import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
+import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
+import { Feather } from "@expo/vector-icons";
+import AntDesign from "@expo/vector-icons/AntDesign";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { LinearGradient } from "expo-linear-gradient";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CareSpaceSettings() {
     StatusBar.setBarStyle("dark-content");
@@ -68,9 +70,10 @@ export default function CareSpaceSettings() {
         generateJoinCode,
     } = useCareSpaces();
     const { dependents } = useDependents();
+    const { user } = useAuth();
     const { profileData } = useUser();
     const selfDependentResolution = useMemo(() => selfDependentContextFromProfile(profileData), [profileData]);
-    const { deleteTaskApi } = useTasks();
+    const { tasks: tasksFromContext, deleteTaskApi, listMyTasks, listCreatedByMeTasks } = useTasks();
     const careSpaceId = getParamValue(params.id);
     const selectedCareSpace = careSpaceId ? careSpaces.find((item) => item.id === careSpaceId) : undefined;
     const currentUserRole = selectedCareSpace?.currentUserRole;
@@ -121,6 +124,14 @@ export default function CareSpaceSettings() {
         const parsed = Number.parseInt(source, 10);
         return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
     };
+
+    const numericCareSpaceIdResolved = useMemo(() => resolveCareSpaceNumericId(), [careSpaceId, selectedCareSpace?.id]);
+
+    /** Care space model `tasks` is not filled from API; use TasksContext like Home. */
+    const tasksInThisCareSpace = useMemo((): Task[] => {
+        if (numericCareSpaceIdResolved == null) return [];
+        return tasksFromContext.filter((t) => t.careSpaceId === numericCareSpaceIdResolved);
+    }, [tasksFromContext, numericCareSpaceIdResolved]);
 
     useEffect(() => {
         setSpaceName(initialSpaceName);
@@ -235,6 +246,31 @@ export default function CareSpaceSettings() {
         return () => clearInterval(id);
     }, []);
 
+    /** Ensure TasksContext has pending, completed, and missed rows (same slices as Tasks tab) before filtering by care space. */
+    useEffect(() => {
+        if (!user?.access_token || numericCareSpaceIdResolved == null) {
+            return;
+        }
+        let cancelled = false;
+        const statuses: Array<"pending" | "completed" | "missed"> = ["pending", "completed", "missed"];
+        (async () => {
+            for (const status of statuses) {
+                if (cancelled) return;
+                try {
+                    await listMyTasks({ dateFilter: "all", status });
+                    if (cancelled) return;
+                    await listCreatedByMeTasks({ dateFilter: "all", status });
+                } catch {
+                    // Network / auth — Tasks tab can refetch
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- list fns are stable enough; avoid re-fetch loops
+    }, [user?.access_token, numericCareSpaceIdResolved]);
+
     const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
         if (!dueDate) return null;
         const timePart = dueTime && dueTime.trim().length > 0 ? dueTime : "23:59";
@@ -250,18 +286,16 @@ export default function CareSpaceSettings() {
         return null;
     };
 
-    const computeComputedStatus = (taskStatus: string, due: Date | null) => {
-        if (taskStatus === "pending" && due && due.getTime() < nowMs) {
-            return "missing" as const;
-        }
-        return taskStatus as "pending" | "completed" | "missing";
-    };
-
-    const decoratedTasks = careSpaceTasks.map((task) => {
-        const due = parseDueDateTime(task.dueDate, task.dueTime);
-        const computedStatus = computeComputedStatus(task.status, due);
-        return { ...task, computedStatus };
-    });
+    const decoratedTasks = useMemo(() => {
+        const rows = tasksInThisCareSpace.map((task) => {
+            const due = parseLocalDueDateTime(task.dueDate, task.dueTime);
+            const computedStatus = computeComputedTaskStatus(task.status, due, nowMs);
+            const sortKey = due?.getTime() ?? Number.MAX_SAFE_INTEGER;
+            return { ...task, computedStatus, sortKey };
+        });
+        rows.sort((a, b) => a.sortKey - b.sortKey);
+        return rows.map(({ sortKey: _k, ...task }) => task);
+    }, [tasksInThisCareSpace, nowMs]);
 
     const statusTagByStatus = {
         pending: <PendingStatus />,
@@ -311,8 +345,14 @@ export default function CareSpaceSettings() {
 
     return (
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={{ flex: 1 }}>
-            <ScrollView style={{ flex: 1 }}>
-            <SafeAreaView style={{ flex: 1 }}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+                <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={styles.screenScrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator
+                >
+            <SafeAreaView edges={["top", "left", "right"]}>
                 <View style={styles.container}>
                     <View style={styles.headerContainer}>
                         <Pressable onPress={() => router.back()}>
@@ -462,15 +502,17 @@ export default function CareSpaceSettings() {
                         {/* This is for the task card */}
                         {decoratedTasks.length === 0 ? (
                             <View style={styles.taskContainer}>
-                                <NoPendingTask />
+                                <NoPendingTask
+                                    title="No tasks in this care space"
+                                    subtitle="Create a task from the Tasks tab or tap Add Task when available."
+                                />
                             </View>
                         ) : (
-                            <ScrollView>
-                                <View style={styles.taskContainer}>
-                                    {decoratedTasks.map((task) => (
-                                        <EditableTaskCard
-                                            key={task.id}
-                                            value={task.id}
+                            <View style={styles.taskContainer}>
+                                {decoratedTasks.map((task) => (
+                                    <EditableTaskCard
+                                        key={task.id}
+                                        value={task.id}
                                         selectedTask={selectedTask}
                                         onSelect={setSelectedTask}
                                         title={task.title}
@@ -489,7 +531,10 @@ export default function CareSpaceSettings() {
                                                 pathname: "/editTaskPage",
                                                 params: {
                                                     id: task.id,
-                                                    careSpaceId: resolveCareSpaceNumericId() ? String(resolveCareSpaceNumericId()) : undefined,
+                                                    careSpaceId:
+                                                        numericCareSpaceIdResolved != null
+                                                            ? String(numericCareSpaceIdResolved)
+                                                            : undefined,
                                                 },
                                             })
                                         }
@@ -498,20 +543,22 @@ export default function CareSpaceSettings() {
                                                 pathname: "/taskDetails",
                                                 params: {
                                                     id: task.id,
-                                                    careSpaceId: resolveCareSpaceNumericId() ? String(resolveCareSpaceNumericId()) : undefined,
+                                                    careSpaceId:
+                                                        numericCareSpaceIdResolved != null
+                                                            ? String(numericCareSpaceIdResolved)
+                                                            : undefined,
                                                 },
                                             })
                                         }
                                         onDelete={() => setPendingDeleteId(task.id)}
                                     />
                                 ))}
-                                </View>
-                            </ScrollView>
+                            </View>
                         )}
 
                         <DeleteTaskModal
                             visible={pendingDeleteId !== null}
-                            taskTitle={careSpaceTasks.find((taskItem) => taskItem.id === pendingDeleteId)?.title}
+                            taskTitle={tasksInThisCareSpace.find((taskItem) => taskItem.id === pendingDeleteId)?.title}
                             onConfirm={async () => {
                                 if (!pendingDeleteId) {
                                     setPendingDeleteId(null);
@@ -533,7 +580,6 @@ export default function CareSpaceSettings() {
 
                                 try {
                                     await deleteTaskApi(numericTaskId, numericCareSpaceId);
-                                    setCareSpaceTasks((prev) => prev.filter((taskItem) => taskItem.id !== pendingDeleteId));
 
                                     if (careSpaceId) {
                                         removeTaskFromCareSpace(careSpaceId, pendingDeleteId);
@@ -702,7 +748,8 @@ export default function CareSpaceSettings() {
 
                 </View>
             </SafeAreaView>
-            </ScrollView>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </LinearGradient>
     );
 }
@@ -991,11 +1038,18 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 	},
 
+    screenScrollContent: {
+        paddingBottom: 48,
+        flexGrow: 1,
+    },
+
     taskContainer: {
         borderWidth: 1,
         borderColor: "#e0e0e0",
         borderRadius: 14,
         marginTop: 20,
+        paddingBottom: 8,
+        gap: 12,
     },
 
     datePill: {

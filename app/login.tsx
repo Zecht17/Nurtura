@@ -67,7 +67,7 @@ export default function LoginScreen() {
             style={styles.gradient}
         >
             
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.container}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
                 <View style={styles.logoContainer}>
                     <Image
                         source={require("../assets/images/nurtura_splash.png")}
