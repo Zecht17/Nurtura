@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Stack, usePathname, useRootNavigationState, useRouter, useSegments } from "expo-router";
+import { Stack, useGlobalSearchParams, usePathname, useRootNavigationState, useRouter, useSegments } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Easing, Image, StatusBar, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Easing, Image, PanResponder, TextInput as RNTextInput, StatusBar, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { MD3LightTheme, PaperProvider } from "react-native-paper";
 import ReminderModal from "../components/modals/reminderModal";
@@ -53,6 +53,18 @@ export default function RootLayout() {
   const [showIntroSplash, setShowIntroSplash] = useState(true);
 
   useEffect(() => {
+    const textCtor = Text as any;
+    textCtor.defaultProps = textCtor.defaultProps ?? {};
+    textCtor.defaultProps.allowFontScaling = false;
+    textCtor.defaultProps.maxFontSizeMultiplier = 1;
+
+    const inputCtor = RNTextInput as any;
+    inputCtor.defaultProps = inputCtor.defaultProps ?? {};
+    inputCtor.defaultProps.allowFontScaling = false;
+    inputCtor.defaultProps.maxFontSizeMultiplier = 1;
+  }, []);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       setShowIntroSplash(false);
     }, 2500);
@@ -74,28 +86,30 @@ export default function RootLayout() {
               <TasksProvider>
                 <CareSpacesProvider>
                   <PaperProvider theme={MD3LightTheme}>
-                    <ReminderMounts />
-                    <RouteGuard>
-                      <Stack>
-                        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                        <Stack.Screen name="login" options={{ headerShown: false }} />
-                        <Stack.Screen name="signup" options={{ headerShown: false }} />
-                        <Stack.Screen name="addTaskPage" options={{ headerShown: false }} />
-                        <Stack.Screen name="editTaskPage" options={{ headerShown: false }} />
-                        <Stack.Screen name="taskDetails" options={{ headerShown: false }} />
-                        <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} />
-                        <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} />
-                        <Stack.Screen name="aiChat" options={{ headerShown: false }} />
-                        <Stack.Screen name="dependentProfile" options={{ headerShown: false }} />
-                        <Stack.Screen name="profileAndAccount" options={{ headerShown: false }} />
-                        <Stack.Screen name="editProfile" options={{ headerShown: false }} />
-                        <Stack.Screen name="settings" options={{ headerShown: false }} />
-                        <Stack.Screen name="addDependent" options={{ headerShown: false }} />
-                        <Stack.Screen name="editDependent" options={{ headerShown: false }} />
-                        <Stack.Screen name="dependentAccount" options={{ headerShown: false }} />
-                        <Stack.Screen name="emergencyAlertPage" options={{ headerShown: false }} />
-                      </Stack>
-                    </RouteGuard>
+                    <GlobalPullToRefresh>
+                      <ReminderMounts />
+                      <RouteGuard>
+                        <Stack>
+                          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                          <Stack.Screen name="login" options={{ headerShown: false }} />
+                          <Stack.Screen name="signup" options={{ headerShown: false }} />
+                          <Stack.Screen name="addTaskPage" options={{ headerShown: false }} />
+                          <Stack.Screen name="editTaskPage" options={{ headerShown: false }} />
+                          <Stack.Screen name="taskDetails" options={{ headerShown: false }} />
+                          <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} />
+                          <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} />
+                          <Stack.Screen name="aiChat" options={{ headerShown: false }} />
+                          <Stack.Screen name="dependentProfile" options={{ headerShown: false }} />
+                          <Stack.Screen name="profileAndAccount" options={{ headerShown: false }} />
+                          <Stack.Screen name="editProfile" options={{ headerShown: false }} />
+                          <Stack.Screen name="settings" options={{ headerShown: false }} />
+                          <Stack.Screen name="addDependent" options={{ headerShown: false }} />
+                          <Stack.Screen name="editDependent" options={{ headerShown: false }} />
+                          <Stack.Screen name="dependentAccount" options={{ headerShown: false }} />
+                          <Stack.Screen name="emergencyAlertPage" options={{ headerShown: false }} />
+                        </Stack>
+                      </RouteGuard>
+                    </GlobalPullToRefresh>
                   </PaperProvider>
                 </CareSpacesProvider>
               </TasksProvider>
@@ -105,6 +119,162 @@ export default function RootLayout() {
         </UserProvider>
       </AuthProvider>
     </GestureHandlerRootView>
+  );
+}
+
+function GlobalPullToRefresh({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useGlobalSearchParams();
+  const [isPulling, setIsPulling] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const pullDistance = useRef(new Animated.Value(0)).current;
+  const refreshStartedRef = useRef(false);
+  const activePullRef = useRef(false);
+
+  const MAX_PULL_DISTANCE = 140;
+  const REFRESH_TRIGGER_DISTANCE = 90;
+
+  const buildRefreshPath = () => {
+    const nextQuery = new URLSearchParams();
+
+    Object.entries(searchParams).forEach(([key, value]) => {
+      if (key === "refreshTs") return;
+      if (key === "screen" || key === "params" || key === "state" || key === "initial") return;
+
+      if (Array.isArray(value)) {
+        value.forEach((entry) => {
+          if (entry != null) nextQuery.append(key, String(entry));
+        });
+        return;
+      }
+
+      if (value != null) {
+        nextQuery.append(key, String(value));
+      }
+    });
+
+    nextQuery.set("refreshTs", Date.now().toString());
+    const queryString = nextQuery.toString();
+    return queryString ? `${pathname}?${queryString}` : `${pathname}?refreshTs=${Date.now()}`;
+  };
+
+  const resetPosition = () => {
+    setIsPulling(false);
+    Animated.timing(pullDistance, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const triggerRefresh = () => {
+    if (refreshStartedRef.current) return;
+    refreshStartedRef.current = true;
+    setIsPulling(false);
+    setIsRefreshing(true);
+
+    try {
+      Animated.timing(pullDistance, {
+        toValue: 72,
+        duration: 120,
+        useNativeDriver: false,
+      }).start();
+
+      router.replace(buildRefreshPath() as any);
+
+      setTimeout(() => {
+        setIsRefreshing(false);
+        refreshStartedRef.current = false;
+        resetPosition();
+      }, 220);
+    } catch {
+      setIsRefreshing(false);
+      refreshStartedRef.current = false;
+      resetPosition();
+    }
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+        if (isRefreshing) return false;
+        const fromTopEdge = gestureState.y0 <= 100;
+        const isDownPull = gestureState.dy > 8;
+        const mostlyVertical = Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+        return fromTopEdge && isDownPull && mostlyVertical;
+      },
+      onPanResponderGrant: () => {
+        if (isRefreshing) return;
+        activePullRef.current = true;
+        refreshStartedRef.current = false;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (!activePullRef.current || isRefreshing || refreshStartedRef.current) return;
+
+        if (gestureState.dy <= 0) {
+          setIsPulling(false);
+          pullDistance.setValue(0);
+          return;
+        }
+
+        const nextDistance = Math.min(gestureState.dy * 0.55, MAX_PULL_DISTANCE);
+        setIsPulling(nextDistance > 8);
+        pullDistance.setValue(nextDistance);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        activePullRef.current = false;
+
+        if (!isRefreshing && !refreshStartedRef.current) {
+          const releasedDistance = Math.min(Math.max(gestureState.dy * 0.55, 0), MAX_PULL_DISTANCE);
+          if (releasedDistance >= REFRESH_TRIGGER_DISTANCE) {
+            triggerRefresh();
+          } else {
+            resetPosition();
+          }
+        }
+      },
+      onPanResponderTerminate: () => {
+        activePullRef.current = false;
+        if (!isRefreshing && !refreshStartedRef.current) {
+          resetPosition();
+        }
+      },
+    })
+  ).current;
+
+  const spinnerOpacity = pullDistance.interpolate({
+    inputRange: [0, 20, 55],
+    outputRange: [0, 0.45, 1],
+    extrapolate: "clamp",
+  });
+
+  const spinnerTranslateY = pullDistance.interpolate({
+    inputRange: [0, MAX_PULL_DISTANCE],
+    outputRange: [-18, 12],
+    extrapolate: "clamp",
+  });
+
+  return (
+    <View style={styles.pullRoot} {...panResponder.panHandlers}>
+      <Animated.View pointerEvents="none" style={[styles.pullReveal, { height: pullDistance }]}> 
+        <LinearGradient colors={["#E5F1FF", "#EEE8F8"]} style={styles.pullRevealGradient}>
+          <Animated.View
+            style={[
+              styles.pullSpinnerWrap,
+              {
+                opacity: isRefreshing ? 1 : spinnerOpacity,
+                transform: [{ translateY: spinnerTranslateY }],
+              },
+            ]}
+          >
+            {(isPulling || isRefreshing) && <ActivityIndicator size="small" color="#7C6FDC" />}
+          </Animated.View>
+        </LinearGradient>
+      </Animated.View>
+
+      <Animated.View style={[styles.pullContent, { transform: [{ translateY: pullDistance }] }]}>{children}</Animated.View>
+    </View>
   );
 }
 
@@ -225,6 +395,29 @@ function ReminderMounts() {
 }
 
 const styles = StyleSheet.create({
+  pullRoot: {
+    flex: 1,
+  },
+  pullContent: {
+    flex: 1,
+  },
+  pullReveal: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    overflow: "hidden",
+    zIndex: 0,
+  },
+  pullRevealGradient: {
+    flex: 1,
+  },
+  pullSpinnerWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingTop: 14,
+  },
   splashGradient: {
     flex: 1,
   },

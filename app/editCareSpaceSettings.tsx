@@ -1,6 +1,7 @@
 import EditableTaskCard from "@/components/cards/editableTaskCard";
 import DeleteTaskModal from "@/components/modals/DeleteTaskModal";
 import DateStatus from "@/components/tags/date/dateStatus";
+import RecurringDayStatusTags, { getRecurringPatternBase } from "@/components/tags/date/recurringDayStatusTags";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
@@ -326,10 +327,18 @@ export default function EditCareSpaceSettings() {
                                                 <>
                                                     {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
                                                     {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
-                                                    {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
+                                                    {(() => {
+                                                        const recurringBase = getRecurringPatternBase(task.recurringPattern);
+                                                        return recurringBase ? recurringTagByPattern[recurringBase as keyof typeof recurringTagByPattern] : null;
+                                                    })()}
                                                 </>
                                             }
-                                            dateTag={renderDateTag(task.dueDate, task.dueTime)}
+                                            dateTag={
+                                                <>
+                                                    <RecurringDayStatusTags recurringPattern={task.recurringPattern} />
+                                                    {renderDateTag(task.dueDate, task.dueTime)}
+                                                </>
+                                            }
                                             onEdit={() =>
                                                 router.push({
                                                     pathname: "/editTaskPage",

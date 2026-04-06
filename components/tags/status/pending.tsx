@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 export default function PendingStatus() {
 	return (
 		<View style={styles.pending}>
-			<Text style={styles.pendingText}>Pending</Text>
+			<Text style={styles.pendingText} allowFontScaling={false}>Pending</Text>
 		</View>
 	);
 }
@@ -17,6 +17,7 @@ const styles = StyleSheet.create({
 	},
 	pendingText: {
 		color: "#ffffff",
-		fontSize: 14,
+		fontSize: 12,
+		flexShrink: 1,
 	},
 });

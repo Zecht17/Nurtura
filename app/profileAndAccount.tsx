@@ -5,12 +5,13 @@ import Octicons from '@expo/vector-icons/Octicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ChangePasswordModal from '../components/modals/changePasswordModal';
 import DeactivateModal from '../components/modals/deactivateModal';
 import { useAuth } from '../context/AuthContext';
 import { useUser } from '../context/UserContext';
+import { getResponsiveTokens } from '../utils/responsive';
 
 const formatDate = (value?: string) => {
     if (!value) {
@@ -38,6 +39,8 @@ const toDisplayRole = (value?: string) => {
 };
 
 export default function ProfileAndAccount() {
+    const { width } = useWindowDimensions();
+    const tokens = getResponsiveTokens(width);
     const { user, logout } = useAuth();
     const {
         profileData,
@@ -83,21 +86,21 @@ export default function ProfileAndAccount() {
   return (
     <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={profile.gradient}>
         <ScrollView>
-        <SafeAreaView style={profile.container}>
+        <SafeAreaView style={[profile.container, { maxWidth: tokens.containerMaxWidth, alignSelf: 'center', width: '100%', padding: tokens.pagePadding }]}>
             
             <View style={profile.headerContainer}>
                 <Pressable onPress={() => router.back()} hitSlop={12}>
                     <Feather name="arrow-left" size={24} color="black" />
                 </Pressable>
                 <View>
-                    <Text style={profile.headerTitle}>Profile & Account</Text>
-                    <Text style={profile.subHeader}>Manage your personal information {"\n"}and security profile</Text>
+                    <Text style={[profile.headerTitle, { fontSize: tokens.title }]}>Profile & Account</Text>
+                    <Text style={[profile.subHeader, { fontSize: tokens.subtitle }]}>Manage your personal information {"\n"}and security profile</Text>
                 </View>
             </View>
 
             <View style={profile.accInfoContainer}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 5 }}>
-                    <Text style={profile.accInfoTitle}>Personal Information</Text>
+                    <Text style={[profile.accInfoTitle, { fontSize: tokens.subtitle }]}>Personal Information</Text>
                     <Pressable
                         onPress={() => {
                             router.push('/editProfile');
@@ -108,112 +111,112 @@ export default function ProfileAndAccount() {
                         ]}
                     >
                         <Ionicons name="pencil-outline" size={16} color="#000000" />
-                        <Text>Edit</Text>
+                        <Text style={{ fontSize: tokens.menuText }}>Edit</Text>
                     </Pressable>
                 </View>
-                <Text style={profile.accInfoSubTitle}>Your personal information and contact information</Text>
+                <Text style={[profile.accInfoSubTitle, { fontSize: tokens.body }]}>Your personal information and contact information</Text>
 
                 {profileLoading ? (
                     <View style={profile.feedbackRow}>
                         <ActivityIndicator size="small" color="#7C6FDC" />
-                        <Text style={profile.feedbackText}>Loading profile...</Text>
+                        <Text style={[profile.feedbackText, { fontSize: tokens.body }]}>Loading profile...</Text>
                     </View>
                 ) : null}
 
                 {profileError ? (
-                    <Text style={profile.errorText}>{profileError}</Text>
+                    <Text style={[profile.errorText, { fontSize: tokens.chipText }]}>{profileError}</Text>
                 ) : null}
 
                 {/* This is for the user information */}
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={profile.accCredTitle}>Username:</Text>
+                    <Text style={[profile.accCredTitle, { fontSize: tokens.subtitle }]}>Username:</Text>
                     <View style={profile.inputContainer}>
                         <Octicons name="person" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{profileData?.username || user?.username || '-'}</Text>
+                        <Text style={[profile.accCredInfo, { fontSize: tokens.body }]}>{profileData?.username || user?.username || '-'}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={profile.accCredTitle}>First Name:</Text>
+                    <Text style={[profile.accCredTitle, { fontSize: tokens.subtitle }]}>First Name:</Text>
                     <View style={profile.inputContainer}>
                         <Octicons name="person" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{profileData?.first_name || '-'}</Text>
+                        <Text style={[profile.accCredInfo, { fontSize: tokens.body }]}>{profileData?.first_name || '-'}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={profile.accCredTitle}>Middle Name:</Text>
+                    <Text style={[profile.accCredTitle, { fontSize: tokens.subtitle }]}>Middle Name:</Text>
                     <View style={profile.inputContainer}>
                         <Octicons name="person" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{profileData?.middle_name || '-'}</Text>
+                        <Text style={[profile.accCredInfo, { fontSize: tokens.body }]}>{profileData?.middle_name || '-'}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={profile.accCredTitle}>Last Name:</Text>
+                    <Text style={[profile.accCredTitle, { fontSize: tokens.subtitle }]}>Last Name:</Text>
                     <View style={profile.inputContainer}>
                         <Octicons name="person" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{profileData?.last_name || '-'}</Text>
+                        <Text style={[profile.accCredInfo, { fontSize: tokens.body }]}>{profileData?.last_name || '-'}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={profile.accCredTitle}>Full Name:</Text>
+                    <Text style={[profile.accCredTitle, { fontSize: tokens.subtitle }]}>Full Name:</Text>
                     <View style={profile.inputContainer}>
                         <Octicons name="person" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{fullName}</Text>
+                        <Text style={[profile.accCredInfo, { fontSize: tokens.body }]}>{fullName}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={profile.accCredTitle}>Email:</Text>
+                    <Text style={[profile.accCredTitle, { fontSize: tokens.subtitle }]}>Email:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="mail-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{profileData?.email || '-'}</Text>
+                        <Text style={[profile.accCredInfo, { fontSize: tokens.body }]}>{profileData?.email || '-'}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={profile.accCredTitle}>Role:</Text>
+                    <Text style={[profile.accCredTitle, { fontSize: tokens.subtitle }]}>Role:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="shield-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{toDisplayRole(profileData?.role || user?.role)}</Text>
+                        <Text style={[profile.accCredInfo, { fontSize: tokens.body }]}>{toDisplayRole(profileData?.role || user?.role)}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={profile.accCredTitle}>Phone Number:</Text>
+                    <Text style={[profile.accCredTitle, { fontSize: tokens.subtitle }]}>Phone Number:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="call-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{profileData?.phone_number || '-'}</Text>
+                        <Text style={[profile.accCredInfo, { fontSize: tokens.body }]}>{profileData?.phone_number || '-'}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={profile.accCredTitle}>Account Created:</Text>
+                    <Text style={[profile.accCredTitle, { fontSize: tokens.subtitle }]}>Account Created:</Text>
                     <View style={profile.inputContainer}>
                         <Ionicons name="shield-outline" size={16} color="#7C6FDC" />
-                        <Text style={profile.accCredInfo}>{formatDate(profileData?.created_at)}</Text>
+                        <Text style={[profile.accCredInfo, { fontSize: tokens.body }]}>{formatDate(profileData?.created_at)}</Text>
                     </View>
                 </View>
             </View>
 
             {/* Security Section */}
             <View style={profile.accInfoContainer}>
-                <Text style={profile.accInfoTitle}>Security</Text>
-                <Text style={profile.accInfoSubTitle}>Manage your password and security settings</Text>
+                <Text style={[profile.accInfoTitle, { fontSize: tokens.subtitle }]}>Security</Text>
+                <Text style={[profile.accInfoSubTitle, { fontSize: tokens.body }]}>Manage your password and security settings</Text>
                 <Pressable style={profile.changePassButton} onPress={() => setShowChangePassword(true)}>
                         <Ionicons name="shield-outline" size={16} color="#111" />
-                        <Text style={profile.editButtonText}>Change Password</Text>
+                        <Text style={[profile.editButtonText, { fontSize: tokens.menuText }]}>Change Password</Text>
                 </Pressable>
             </View>
 
             <View style={profile.accInfoContainerDanger}>
-                <Text style={profile.accInfoTitle}>Danger Zone</Text>
-                <Text style={profile.accInfoSubTitle}>Irreversible account actions</Text>
+                <Text style={[profile.accInfoTitle, { fontSize: tokens.subtitle }]}>Danger Zone</Text>
+                <Text style={[profile.accInfoSubTitle, { fontSize: tokens.body }]}>Irreversible account actions</Text>
                 <Pressable style={profile.dangerButton} onPress={() => setShowDeactivate(true)}>
                         <AntDesign name="exclamation-circle" size={16} color="white" />
-                        <Text style={profile.dangerButtonText}>Delete Account</Text>
+                        <Text style={[profile.dangerButtonText, { fontSize: tokens.menuText }]}>Delete Account</Text>
                 </Pressable>
             </View>
 

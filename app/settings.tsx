@@ -5,10 +5,11 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useMemo } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
 import { useUser } from "../context/UserContext";
+import { getResponsiveTokens } from "../utils/responsive";
 
 const formatDate = (value?: string) => {
     if (!value) {
@@ -29,6 +30,8 @@ const formatDate = (value?: string) => {
 
 export default function SettingsPage() {
 	const router = useRouter();
+    const { width } = useWindowDimensions();
+    const tokens = getResponsiveTokens(width);
     const { logout } = useAuth();
     const { profileData, profileLoading, profileError } = useUser();
 
@@ -53,62 +56,62 @@ export default function SettingsPage() {
 
   return (
     <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={settings.gradient}>
-        <SafeAreaView style={settings.container}>
+        <SafeAreaView style={[settings.container, { maxWidth: tokens.containerMaxWidth, alignSelf: "center", width: "100%", padding: tokens.pagePadding }] }>
             <View style={settings.headerContainer}>
                 <Pressable onPress={() => router.back()} hitSlop={12}>
                     <Feather name="arrow-left" size={24} color="black" />
                 </Pressable>
                 <View>
-                    <Text style={settings.headerTitle}>Settings</Text>
-                    <Text style={settings.subHeader}>Manage your account and preferences</Text>
+                    <Text style={[settings.headerTitle, { fontSize: tokens.title }]}>Settings</Text>
+                    <Text style={[settings.subHeader, { fontSize: tokens.subtitle }]}>Manage your account and preferences</Text>
                 </View>
             </View>
 
             <View style={settings.accInfoContainer}>
-                <Text style={settings.accInfoTitle}>Account Information</Text>
-                <Text style={settings.accInfoSubTitle}>Your personal details</Text>
+                <Text style={[settings.accInfoTitle, { fontSize: tokens.subtitle }]}>Account Information</Text>
+                <Text style={[settings.accInfoSubTitle, { fontSize: tokens.body }]}>Your personal details</Text>
 
                 {profileLoading ? (
                     <View style={settings.feedbackRow}>
                         <ActivityIndicator size="small" color="#7C6FDC" />
-                        <Text style={settings.feedbackText}>Loading account data...</Text>
+                        <Text style={[settings.feedbackText, { fontSize: tokens.body }]}>Loading account data...</Text>
                     </View>
                 ) : null}
 
                 {profileError ? (
-                    <Text style={settings.errorText}>{profileError}</Text>
+                    <Text style={[settings.errorText, { fontSize: tokens.chipText }]}>{profileError}</Text>
                 ) : null}
 
                 {/* This is for the user information */}
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={settings.accCredTitle}>Name:</Text>
+                    <Text style={[settings.accCredTitle, { fontSize: tokens.subtitle }]}>Name:</Text>
                     <View style={settings.inputContainer}>
-                        <Text style={settings.accCredInfo}>{fullName}</Text>
+                        <Text style={[settings.accCredInfo, { fontSize: tokens.body }]}>{fullName}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={settings.accCredTitle}>Email:</Text>
+                    <Text style={[settings.accCredTitle, { fontSize: tokens.subtitle }]}>Email:</Text>
                     <View style={settings.inputContainer}>
-                        <Text style={settings.accCredInfo}>{profileData?.email || "-"}</Text>
+                        <Text style={[settings.accCredInfo, { fontSize: tokens.body }]}>{profileData?.email || "-"}</Text>
                     </View>
                 </View>
 
                 <View style={{ paddingBottom: 15 }}>
-                    <Text style={settings.accCredTitle}>Member Since:</Text>
+                    <Text style={[settings.accCredTitle, { fontSize: tokens.subtitle }]}>Member Since:</Text>
                     <View style={settings.inputContainer}>
-                        <Text style={settings.accCredInfo}>{formatDate(profileData?.created_at)}</Text>
+                        <Text style={[settings.accCredInfo, { fontSize: tokens.body }]}>{formatDate(profileData?.created_at)}</Text>
                     </View>
                 </View>
             </View>
 
             <View style={settings.accInfoContainer}>
-                <Text style={settings.accInfoTitle}>Account Management</Text>
-                <Text style={settings.accInfoSubTitle}>Manage your profile and account settings</Text>
+                <Text style={[settings.accInfoTitle, { fontSize: tokens.subtitle }]}>Account Management</Text>
+                <Text style={[settings.accInfoSubTitle, { fontSize: tokens.body }]}>Manage your profile and account settings</Text>
                 <Pressable style={settings.editButton} onPress={() => router.push("/profileAndAccount")}>
                     <View style={settings.editButtonLeft}>
                         <Ionicons name="person-outline" size={16} color="#111" />
-                        <Text style={settings.editButtonText}>Profile & Account</Text>
+                        <Text style={[settings.editButtonText, { fontSize: tokens.menuText }]} numberOfLines={1}>Profile & Account</Text>
                     </View>
                     <FontAwesome5 name="chevron-right" size={14} color="#111" />
                 </Pressable>
@@ -117,7 +120,7 @@ export default function SettingsPage() {
             {/* Logout button */}
             <Pressable style={settings.logoutButton} onPress={handleLogout}>
                 <MaterialIcons name="logout" size={18} color="white" />
-                <Text style={settings.logoutButtonText}>Logout</Text>
+                <Text style={[settings.logoutButtonText, { fontSize: tokens.subtitle }]}>Logout</Text>
             </Pressable>
 
         </SafeAreaView>

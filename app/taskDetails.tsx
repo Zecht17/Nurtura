@@ -8,22 +8,29 @@ import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useDependents } from "@/context/DependentContext";
 import { type Task, useTasks } from "@/context/tasksContext";
 import { useUser } from "@/context/UserContext";
-import { isDependentRole } from "@/utils/userRole";
 import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
 import {
     parseCareSpaceNumericIdFromString,
     parseNumericTaskIdForApi,
     resolveTaskCareSpaceId,
 } from "@/utils/resolveTaskCareSpaceId";
+import { clamp, scaleByWidth } from "@/utils/responsive";
+import { isDependentRole } from "@/utils/userRole";
 import { Feather } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 export default function TaskDetails() {
+    const { width } = useWindowDimensions();
+    const compact = width < 390;
+    const contentMaxWidth = clamp(width - 16, 320, 760);
+    const pagePadding = scaleByWidth(width, 16, 12, 24);
+    const headerTitleSize = scaleByWidth(width, 24, 21, 30);
+    const sectionGap = scaleByWidth(width, 16, 12, 20);
     const { user } = useAuth();
     const { profileData } = useUser();
     const { tasks, getTaskDetail, deleteTaskApi } = useTasks();
@@ -68,6 +75,15 @@ export default function TaskDetails() {
         return resolved ?? null;
     }, [task, careSpaceId, fallbackSingleCareSpaceNumericId]);
 
+    const isPermissionDetailError = (message: string) => {
+        const normalized = message.toLowerCase();
+        return (
+            normalized.includes("permission") ||
+            normalized.includes("not authorized") ||
+            normalized.includes("forbidden")
+        );
+    };
+
     useEffect(() => {
         if (!numericTaskId || !numericCareSpaceId) {
             setTaskDetail(null);
@@ -92,7 +108,8 @@ export default function TaskDetails() {
                     return;
                 }
 
-                setDetailError(error instanceof Error ? error.message : "Unable to fetch task detail.");
+                const message = error instanceof Error ? error.message : "Unable to fetch task detail.";
+                setDetailError(isPermissionDetailError(message) ? null : message);
                 setTaskDetail(null);
             } finally {
                 if (active) {
@@ -169,21 +186,22 @@ export default function TaskDetails() {
 
     return (
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={styles.gradient}>
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                <SafeAreaView style={styles.container}>
+            <ScrollView contentContainerStyle={[styles.scrollContent, { padding: pagePadding, gap: sectionGap }]} showsVerticalScrollIndicator={false}>
+                <SafeAreaView style={[styles.container, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }] }>
                     {/* This is the header */}
-                    <View style={styles.headerContainer}>
+                    <View style={[styles.headerContainer, compact && styles.headerContainerCompact]}>
                         <Pressable onPress={() => router.back()}>
                             <Feather name="arrow-left" size={24} color="black" />
                         </Pressable>
-                        <View style={{ flex: 1, marginLeft: 15 }}>
-                            <Text style={styles.headerTitle}>Task Details</Text>
+                        <View style={styles.headerTextWrap}>
+                            <Text style={[styles.headerTitle, { fontSize: headerTitleSize }, compact && styles.headerTitleCompact]}>Task Details</Text>
                             <Text style={styles.subHeader}>
                                 {isDependentAccount ? "View this task" : "View and manage this task"}
                             </Text>
                         </View>
                         {!isDependentAccount && (
                             <EditTaskButton
+                                style={compact && styles.editButtonCompact}
                                 onPress={() =>
                                     router.push({
                                         pathname: "/editTaskPage",
@@ -319,6 +337,7 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         padding: 16,
         gap: 16,
+        paddingBottom: 28,
     },
     headerContainer: {
         paddingTop: 8,
@@ -327,12 +346,28 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
+        gap: 10,
         marginBottom: 8,
+    },
+    headerContainerCompact: {
+        alignItems: "flex-start",
+        flexWrap: "wrap",
+    },
+    headerTextWrap: {
+        flex: 1,
+        minWidth: 0,
+        marginLeft: 15,
     },
     headerTitle: {
         fontSize: 24,
         fontWeight: "bold",
         marginTop: 4,
+    },
+    headerTitleCompact: {
+        fontSize: 22,
+    },
+    editButtonCompact: {
+        alignSelf: "flex-start",
     },
     subHeader: {
         fontSize: 16,
@@ -385,6 +420,7 @@ const styles = StyleSheet.create({
         fontSize: 22,
         fontWeight: "bold",
         color: "#111",
+        flexShrink: 1,
     },
     pillRow: {
         flexDirection: "row",
@@ -442,6 +478,8 @@ const styles = StyleSheet.create({
     infoTextGroup: {
         flexDirection: "column",
         gap: 2,
+        flex: 1,
+        minWidth: 0,
     },
     infoLabel: {
         fontSize: 14,
@@ -451,6 +489,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "600",
         color: "#111",
+        flexShrink: 1,
     },
     errorText: {
         fontSize: 13,

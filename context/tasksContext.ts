@@ -85,7 +85,7 @@ export type CreateTaskPayload = {
     scheduleData: {
         start_time: string;
         end_time: string;
-        recurrence_type: "none" | "daily" | "weekly" | "monthly";
+        recurrence_type: "none" | "daily" | "custom" | "weekly" | "monthly";
         recurrence_days: number;
     }[];
 };
@@ -101,7 +101,7 @@ export type UpdateTaskPayload = {
     schedule_data: {
         start_time: string;
         end_time: string;
-        recurrence_type: "none" | "daily" | "weekly" | "monthly";
+        recurrence_type: "none" | "daily" | "custom" | "weekly" | "monthly";
         recurrence_days: number;
     }[];
     localTaskOverrides?: Partial<Task>;
@@ -314,8 +314,25 @@ export function TasksProvider({ children }: { children: ReactNode }) {
 
         const recurrenceType = (schedules[0]?.recurrence_type || "").toString().toLowerCase();
 
+        const labelsByDayIndex = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
         if (recurrenceType === "daily") {
             return "Daily";
+        }
+
+        if (recurrenceType === "custom") {
+            const dayIndices = schedules
+                .map((schedule) => Number(schedule?.recurrence_days))
+                .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6) as number[];
+
+            const uniqueSorted = [...new Set(dayIndices)].sort((a, b) => a - b);
+
+            if (uniqueSorted.length === 0) {
+                return "Custom (Specific Days)";
+            }
+
+            const dayLabel = uniqueSorted.map((day) => labelsByDayIndex[day]).join(", ");
+            return `Custom (Specific Days): ${dayLabel}`;
         }
 
         if (recurrenceType === "weekly") {

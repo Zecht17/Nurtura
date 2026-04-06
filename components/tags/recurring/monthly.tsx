@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 export default function MonthlyRecurringStatus() {
     return (
         <View style={styles.recurring}>
-            <Text style={styles.monthlyText}>Monthly</Text>
+            <Text style={styles.monthlyText} allowFontScaling={false}>Monthly</Text>
         </View>
     );
 }
@@ -17,6 +17,7 @@ const styles = StyleSheet.create({
     },
     monthlyText: {
         color: "#ffffff",
-        fontSize: 14,
+        fontSize: 12,
+        flexShrink: 1,
     },
 });

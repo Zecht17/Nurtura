@@ -1,5 +1,6 @@
+import { scaleByWidth } from "@/utils/responsive";
 import { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 type TaskCardProps = {
     value: string;
@@ -33,6 +34,9 @@ export default function TaskCard({
     dateTag,
     onPress,
 }: TaskCardProps) {
+    const { width } = useWindowDimensions();
+    const titleSize = scaleByWidth(width, 24, 16, 24);
+    const bodySize = scaleByWidth(width, 15, 13, 15);
     const selectionHighlight = !readOnly && onRadioPress == null && selectedTask === value;
     const radioFilled = isCompleted || selectionHighlight;
 
@@ -65,9 +69,9 @@ export default function TaskCard({
                     </Pressable>
                 )}
                 <View style={styles.content}>
-                    <Text style={styles.title}>{title}</Text>
-                    <Text style={styles.subHeader}>{dependent}</Text>
-                    <Text style={styles.subHeader}>{description}</Text>
+                    <Text style={[styles.title, { fontSize: titleSize }]} allowFontScaling={false}>{title}</Text>
+                    <Text style={[styles.subHeader, { fontSize: bodySize }]} allowFontScaling={false}>{dependent}</Text>
+                    <Text style={[styles.subHeader, { fontSize: bodySize }]} allowFontScaling={false}>{description}</Text>
                 </View>
             </View>
             {statusTags ? <View style={styles.statusRow}>{statusTags}</View> : null}
@@ -123,17 +127,20 @@ const styles = StyleSheet.create({
         fontWeight: "bold",
         fontSize: 24,
         color: "#000000",
+        flexShrink: 1,
     },
     subHeader: {
         fontSize: 16,
         color: "#666",
         marginTop: 5,
+        flexShrink: 1,
     },
     statusRow: {
         paddingLeft: 35,
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
+        flexWrap: "wrap",
         marginTop: 10,
     },
 });

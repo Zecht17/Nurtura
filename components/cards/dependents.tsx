@@ -1,10 +1,12 @@
 import { useDependents } from "@/context/DependentContext";
 import Octicons from "@expo/vector-icons/Octicons";
 import { LinearGradient } from "expo-linear-gradient";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 export default function DependentsCard() {
   const { dependents, loadingDependents, dependentsError } = useDependents();
+  const { width } = useWindowDimensions();
+  const compact = width < 380;
 
   const count = dependents.length;
 
@@ -13,16 +15,16 @@ export default function DependentsCard() {
       colors={["#7C6FDC", "rgb(137, 94, 170)"]}
       start={{ x: 0.3706, y: 0.0171 }}
       end={{ x: 0.6294, y: 1 }}
-      style={styles.card}
+      style={[styles.card, compact && styles.cardCompact]}
     >
-      <Text style={styles.title}>Dependents</Text>
-      {dependentsError ? <Text style={styles.errorText}>{dependentsError}</Text> : null}
+      <Text style={styles.title} allowFontScaling={false}>Dependents</Text>
+      {dependentsError ? <Text style={styles.errorText} allowFontScaling={false}>{dependentsError}</Text> : null}
       <View style={styles.row}>
-        <Text style={styles.count}>{loadingDependents ? "—" : String(count)}</Text>
+        <Text style={[styles.count, compact && styles.countCompact]} allowFontScaling={false}>{loadingDependents ? "—" : String(count)}</Text>
         {loadingDependents ? (
           <ActivityIndicator size="small" color="#ffffff" />
         ) : (
-          <Octicons name="person" size={30} color="white" />
+          <Octicons name="person" size={compact ? 28 : 30} color="white" />
         )}
       </View>
     </LinearGradient>
@@ -34,12 +36,16 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 24,
     flex: 1,
-    maxWidth: 220,
+    minWidth: 0,
+  },
+  cardCompact: {
+    padding: 16,
   },
   title: {
     fontSize: 16,
     color: "#ffffff",
     marginBottom: 5,
+    flexShrink: 1,
   },
   errorText: {
     fontSize: 12,
@@ -49,17 +55,16 @@ const styles = StyleSheet.create({
   row: {
     marginTop: 15,
     flexDirection: "row",
-    gap: 50,
-    alignContent: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
     alignItems: "center",
   },
   count: {
     fontSize: 35,
-    marginTop: -4,
+    marginTop: -2,
     fontWeight: "bold",
     color: "#ffffff",
-    alignContent: "center",
-    justifyContent: "center",
+  },
+  countCompact: {
+    fontSize: 32,
   },
 });

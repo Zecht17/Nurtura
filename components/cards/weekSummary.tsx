@@ -5,7 +5,7 @@ import { computeDashboardMetricsFromTasks } from "@/utils/dashboardFromTasks";
 import Octicons from "@expo/vector-icons/Octicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useMemo, useRef } from "react";
-import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 const FILTER_LABEL: Record<DashboardTimeFilter, string> = {
   today: "Today's Summary",
@@ -24,6 +24,8 @@ type Props = {
 export default function WeekSummaryCard({ filter, nowMs, tasks: tasksProp }: Props) {
   const { tasks: tasksFromContext } = useTasks();
   const tasks = tasksProp ?? tasksFromContext;
+  const { width } = useWindowDimensions();
+  const compact = width < 380;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   const metrics = useMemo(
@@ -49,7 +51,7 @@ export default function WeekSummaryCard({ filter, nowMs, tasks: tasksProp }: Pro
     () => ({
       total: String(metrics.totalTasks),
       completed: String(metrics.completedTasks),
-      rate: `${metrics.completionPercentage}%`,
+      rate: String(metrics.completionPercentage),
       progressLabel: `${metrics.completionPercentage}%`,
     }),
     [metrics],
@@ -60,34 +62,37 @@ export default function WeekSummaryCard({ filter, nowMs, tasks: tasksProp }: Pro
       colors={["#7C6FDC", "rgb(137, 94, 170)"]}
       start={{ x: 0.3706, y: 0.0171 }}
       end={{ x: 0.6294, y: 1 }}
-      style={styles.container}
+      style={[styles.container, compact && styles.containerCompact]}
     >
       <View style={styles.headerRow}>
-        <Octicons name="graph" size={24} color="white" />
-        <Text style={styles.headerText}>{headerText}</Text>
+        <Octicons name="graph" size={compact ? 22 : 24} color="white" />
+        <Text style={[styles.headerText, compact && styles.headerTextCompact]} allowFontScaling={false}>{headerText}</Text>
       </View>
 
       <View style={styles.progressRow}>
         <View style={styles.progressItem}>
-          <Text style={styles.progressNumber}>{display.total}</Text>
-          <Text style={styles.progressText}>Total Tasks</Text>
+          <Text style={[styles.progressNumber, compact && styles.progressNumberCompact]} allowFontScaling={false}>{display.total}</Text>
+          <Text style={[styles.progressText, compact && styles.progressTextCompact]} allowFontScaling={false}>Total Tasks</Text>
         </View>
 
         <View style={styles.progressItem}>
-          <Text style={styles.progressNumber}>{display.completed}</Text>
-          <Text style={styles.progressText}>Completed</Text>
+          <Text style={[styles.progressNumber, compact && styles.progressNumberCompact]} allowFontScaling={false}>{display.completed}</Text>
+          <Text style={[styles.progressText, compact && styles.progressTextCompact]} allowFontScaling={false}>Completed</Text>
         </View>
 
         <View style={styles.progressItem}>
-          <Text style={styles.progressNumber}>{display.rate}</Text>
-          <Text style={styles.progressText}>Success Rate</Text>
+          <View style={styles.rateValueRow}>
+            <Text style={[styles.progressNumber, compact && styles.progressNumberCompact]} allowFontScaling={false}>{display.rate}</Text>
+            <Text style={[styles.rateSuffix, compact && styles.rateSuffixCompact]} allowFontScaling={false}>%</Text>
+          </View>
+          <Text style={[styles.progressText, compact && styles.progressTextCompact]} allowFontScaling={false}>Success Rate</Text>
         </View>
       </View>
 
       <View style={styles.completionContainer}>
         <View style={styles.completionRow}>
-          <Text style={styles.completionText}>Completion Progress</Text>
-          <Text style={styles.completionText}>{display.progressLabel}</Text>
+          <Text style={[styles.completionText, compact && styles.completionTextCompact]} allowFontScaling={false}>Completion Progress</Text>
+          <Text style={[styles.completionText, compact && styles.completionTextCompact]} allowFontScaling={false}>{display.progressLabel}</Text>
         </View>
         <View style={styles.progressBarTrack}>
           <Animated.View
@@ -113,6 +118,9 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 24,
   },
+  containerCompact: {
+    padding: 16,
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -123,36 +131,52 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#ffffff",
   },
+  headerTextCompact: {
+    fontSize: 17,
+  },
   progressRow: {
-    marginTop: 15,
+    marginTop: 14,
     flexDirection: "row",
-    gap: 50,
-    alignContent: "center",
-    justifyContent: "center",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    columnGap: 8,
   },
   progressItem: {
-    flexDirection: "column",
-    justifyContent: "center",
+    flex: 1,
     alignItems: "center",
-    fontSize: 16,
-    color: "#ffffff",
-    marginTop: 5,
+    marginTop: 4,
+    minWidth: 0,
   },
   progressNumber: {
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
     color: "#ffffff",
   },
-  progressText: {
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
+  progressNumberCompact: {
+    fontSize: 20,
+  },
+  rateValueRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 2,
+  },
+  rateSuffix: {
     fontSize: 16,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  rateSuffixCompact: {
+    fontSize: 14,
+  },
+  progressText: {
+    fontSize: 14,
     color: "#ffffff",
     marginTop: 5,
+    textAlign: "center",
+    flexShrink: 1,
+  },
+  progressTextCompact: {
+    fontSize: 12,
   },
   completionContainer: {
     marginTop: 15,
@@ -163,9 +187,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   completionText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     marginTop: 1,
+  },
+  completionTextCompact: {
+    fontSize: 12,
   },
   progressBarTrack: {
     marginTop: 5,

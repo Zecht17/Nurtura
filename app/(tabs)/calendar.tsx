@@ -1,6 +1,7 @@
 import AddTaskButton from "@/components/buttons/addTask";
 import TaskCard from "@/components/cards/taskCard";
 import CompleteTaskModal from "@/components/modals/CompleteTaskModal";
+import RecurringDayStatusTags, { getRecurringPatternBase } from "@/components/tags/date/recurringDayStatusTags";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
@@ -14,12 +15,13 @@ import { useDependents } from "@/context/DependentContext";
 import { useTasks } from "@/context/tasksContext";
 import { useUser } from "@/context/UserContext";
 import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
+import { getResponsiveTokens, scaleByWidth } from "@/utils/responsive";
 import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
 import Ionicicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Alert, StatusBar, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -27,6 +29,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CalendarScreen() {
     const router = useRouter();
+    const { width } = useWindowDimensions();
+    const tokens = getResponsiveTokens(width);
+    const contentMaxWidth = tokens.containerMaxWidth;
+    const headerPadding = tokens.pagePadding;
+    const sectionPadding = tokens.sectionPadding;
+    const titleSize = tokens.title;
+    const subtitleSize = tokens.subtitle;
     const { dependents } = useDependents();
     const { profileData } = useUser();
     const { tasks, completeTaskAsUser, listMyTasks, listCreatedByMeTasks } = useTasks();
@@ -205,11 +214,11 @@ export default function CalendarScreen() {
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={styles.gradient}>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 <SafeAreaView style={styles.safeArea}>
-                    <View style={styles.container}>
-                        <View style={styles.headerContainer}>
+                    <View style={[styles.container, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
+                        <View style={[styles.headerContainer, { padding: headerPadding }] }>
                             <View>
-                                <Text style={styles.headerTitle}>Calendar</Text>
-                                <Text style={styles.subHeader}>View Scheduled Task</Text>
+                                <Text style={[styles.headerTitle, { fontSize: titleSize }]}>Calendar</Text>
+                                <Text style={[styles.subHeader, { fontSize: subtitleSize }]}>View Scheduled Task</Text>
                             </View>
                             <AddTaskButton />
                         </View>
@@ -233,20 +242,20 @@ export default function CalendarScreen() {
                                     textDayFontWeight: "500",
                                     textMonthFontWeight: "700",
                                     textDayHeaderFontWeight: "600",
-                                    textDayFontSize: 16,
-                                    textMonthFontSize: 18,
-                                    textDayHeaderFontSize: 13,
+                                    textDayFontSize: scaleByWidth(width, 16, 14, 16),
+                                    textMonthFontSize: scaleByWidth(width, 18, 16, 18),
+                                    textDayHeaderFontSize: scaleByWidth(width, 13, 12, 13),
                                 }}
                             />
                         </View>
 
                         {/* Selected date label */}
-                        <View style={styles.dateContainer}>
+                        <View style={[styles.dateContainer, { paddingHorizontal: sectionPadding }] }>
                             <Text style={styles.dateTitle}>{selectedDateLabel || "Select a date"}</Text>
                         </View>
 
                         {/* Tasks for selected date */}
-                        <View style={styles.taskCardContainer}>
+                        <View style={[styles.taskCardContainer, { paddingHorizontal: sectionPadding }] }>
                             {filteredTasks.map((task) => (
                                 <TaskCard
                                     key={task.id}
@@ -266,10 +275,18 @@ export default function CalendarScreen() {
                                         <>
                                             {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
                                             {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
-                                            {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
+                                            {(() => {
+                                                const recurringBase = getRecurringPatternBase(task.recurringPattern);
+                                                return recurringBase ? recurringTagByPattern[recurringBase as keyof typeof recurringTagByPattern] : null;
+                                            })()}
                                         </>
                                     }
-                                    dateTag={renderDateTag(task.dueDate, task.dueTime)}
+                                    dateTag={
+                                        <>
+                                            <RecurringDayStatusTags recurringPattern={task.recurringPattern} />
+                                            {renderDateTag(task.dueDate, task.dueTime)}
+                                        </>
+                                    }
                                     onPress={() =>
                                         router.push({
                                             pathname: "/taskDetails",
@@ -420,7 +437,7 @@ export const styles = StyleSheet.create({
 
     datePillText: {
         color: "#000000",
-        fontSize: 14,
+        fontSize: 12,
     },
 
     // This is for the task card container

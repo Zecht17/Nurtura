@@ -1,6 +1,6 @@
-import React from 'react';
-import { Modal, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import React from 'react';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface CustomDatePickerModalProps {
     visible: boolean;
@@ -22,6 +22,14 @@ export default function CustomDatePickerModal({
     }, [date, visible]);
 
     const handleDateChange = (event: any, selectedDate: any) => {
+        if (Platform.OS === 'android') {
+            if (event?.type === 'set' && selectedDate) {
+                onDateChange(selectedDate);
+            }
+            onClose();
+            return;
+        }
+
         if (selectedDate) {
             setTempDate(selectedDate);
         }
@@ -31,6 +39,19 @@ export default function CustomDatePickerModal({
         onDateChange(tempDate);
         onClose();
     };
+
+    if (!visible) return null;
+
+    if (Platform.OS === 'android') {
+        return (
+            <DateTimePicker
+                value={date}
+                mode="date"
+                display="default"
+                onChange={handleDateChange}
+            />
+        );
+    }
 
     return (
         <Modal

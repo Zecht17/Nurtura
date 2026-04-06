@@ -1,5 +1,6 @@
 import Feather from "@expo/vector-icons/Feather";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -27,6 +28,7 @@ export default function GenerateCsCodeModal({
     const [isCodeInputActive, setIsCodeInputActive] = React.useState(false);
     const [submitting, setSubmitting] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
+    const [copied, setCopied] = React.useState(false);
 
     React.useEffect(() => {
         if (visible) {
@@ -36,8 +38,22 @@ export default function GenerateCsCodeModal({
             setIsCodeInputActive(false);
             setSubmitting(false);
             setError(null);
+            setCopied(false);
         }
     }, [visible, initialCode, initialRole]);
+
+    const handleCopyCode = async () => {
+        if (!code || code.trim().length === 0) {
+            return;
+        }
+
+        await Clipboard.setStringAsync(code.trim());
+        setCopied(true);
+
+        setTimeout(() => {
+            setCopied(false);
+        }, 1200);
+    };
 
     const handleGenerate = async () => {
         if (!onGenerate) {
@@ -96,10 +112,18 @@ export default function GenerateCsCodeModal({
                                 keyboardType="default"
                             />
                         ) : (
-                            <View pointerEvents="none">
+                            <View pointerEvents="none" style={styles.inputDisabledWrapper}>
                                 <Text style={[styles.input, styles.inputDisabled]}>{code || "ABC-DEF"}</Text>
                             </View>
                         )}
+
+                        <Pressable
+                            style={[styles.copyButton, (!code || submitting) && styles.copyButtonDisabled]}
+                            onPress={handleCopyCode}
+                            disabled={!code || submitting}
+                        >
+                            <Feather name={copied ? "check" : "copy"} size={16} color="#4c1d95" />
+                        </Pressable>
                     </View>
 
                     <Text style={[styles.label, styles.roleLabel]}>Role</Text>
@@ -201,16 +225,40 @@ const styles = StyleSheet.create({
         paddingVertical: 2,
         minHeight: 48,
         justifyContent: "center",
+        alignItems: "stretch",
+        position: "relative",
     },
     input: {
+        width: "100%",
         fontSize: 18,
         letterSpacing: 2,
         color: "#333",
         fontWeight: "600",
         paddingVertical: 8,
+        textAlign: "center",
+        paddingHorizontal: 44,
+    },
+    inputDisabledWrapper: {
+        width: "100%",
     },
     inputDisabled: {
         color: "#9aa0a6",
+    },
+    copyButton: {
+        position: "absolute",
+        right: 8,
+        top: 7,
+        backgroundColor: "#ffffff",
+        borderColor: "#e4e4e7",
+        borderWidth: 1,
+        borderRadius: 10,
+        width: 34,
+        height: 34,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    copyButtonDisabled: {
+        opacity: 0.45,
     },
     roleLabel: {
         marginTop: 16,

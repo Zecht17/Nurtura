@@ -5,6 +5,7 @@ import NoMissingTask from "@/components/cards/noMissingTask";
 import NoPendingTask from "@/components/cards/noPendingTask";
 import CompleteTaskModal from "@/components/modals/CompleteTaskModal";
 import DeleteTaskModal from "@/components/modals/DeleteTaskModal";
+import RecurringDayStatusTags, { getRecurringPatternBase } from "@/components/tags/date/recurringDayStatusTags";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
@@ -14,26 +15,27 @@ import WeeklyRecurringStatus from "@/components/tags/recurring/weekly";
 import CompletedStatus from "@/components/tags/status/completed";
 import MissedStatus from "@/components/tags/status/missed";
 import PendingStatus from "@/components/tags/status/pending";
+import { useAuth } from "@/context/AuthContext";
+import { useCareSpaces } from "@/context/CareSpacesContext";
+import { useDependents } from "@/context/DependentContext";
+import { useTasks } from "@/context/tasksContext";
+import { useUser } from "@/context/UserContext";
 import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
 import {
     parseCareSpaceNumericIdFromString,
     parseNumericTaskIdForApi,
     resolveTaskCareSpaceId,
 } from "@/utils/resolveTaskCareSpaceId";
+import { getResponsiveTokens, scaleByWidth } from "@/utils/responsive";
 import { collectAssigneeIdsFromTask } from "@/utils/taskAssigneeIds";
 import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
-import { useAuth } from "@/context/AuthContext";
-import { useCareSpaces } from "@/context/CareSpacesContext";
-import { useDependents } from "@/context/DependentContext";
-import { useTasks } from "@/context/tasksContext";
-import { useUser } from "@/context/UserContext";
 import { isDependentRole } from "@/utils/userRole";
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, TextInput as RNTextInput, ScrollView, StatusBar, StyleSheet, Text, UIManager, View } from "react-native";
+import { Alert, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, TextInput as RNTextInput, ScrollView, StatusBar, StyleSheet, Text, UIManager, View, useWindowDimensions } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -43,6 +45,21 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export default function TaskScreen() {
     const router = useRouter();
+    const { width } = useWindowDimensions();
+    const tokens = getResponsiveTokens(width);
+    const compact = width < 350;
+    const narrow = width < 350;
+    const stackControls = width < 340;
+    const contentMaxWidth = tokens.containerMaxWidth;
+    const blockPadding = tokens.sectionPadding;
+    const headerPadding = tokens.pagePadding;
+    const controlsInset = scaleByWidth(width, 15, 12, 16);
+    const titleSize = tokens.title;
+    const subtitleSize = tokens.subtitle;
+    const statusPillMinWidth = scaleByWidth(width, 96, 88, 112);
+    const selectorTextSize = scaleByWidth(width, 15, 12, 15);
+    const statusLabelTextSize = scaleByWidth(width, 13, 11, 14);
+    const statusIconSize = scaleByWidth(width, 16, 14, 16);
     const { user } = useAuth();
     const { careSpaces } = useCareSpaces();
     const { dependents } = useDependents();
@@ -134,12 +151,16 @@ export default function TaskScreen() {
         selectedAssignee === "myTasks"
             ? "My tasks"
             : selectedAssignee === "createdByMe"
-                ? "Tasks Created by Me"
+                ? narrow
+                    ? "Created by Me"
+                    : "Tasks Created by Me"
                 : dependentOptions.find((option) => option.userId === selectedAssignee)?.name || "Select Dependent";
 
     const selectedCareSpaceLabel =
         selectedCareSpaceId === null
-            ? "All Care Spaces"
+            ? narrow
+                ? "All Spaces"
+                : "All Care Spaces"
             : careSpaceOptions.find((option) => option.id === selectedCareSpaceId)?.title || "Select Care Space";
 
     useEffect(() => {
@@ -205,6 +226,11 @@ export default function TaskScreen() {
     StatusBar.setBarStyle("dark-content");
 
     const currentUserId = profileData?.user_id;
+    const normalizedKeywordTokens = searchQuery
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
 
     const filteredTasks = decoratedTasks.filter((task) => {
         const matchesStatus = task.computedStatus === selectedStatus;
@@ -252,16 +278,16 @@ export default function TaskScreen() {
             }
         }
 
-        if (!searchQuery.trim()) {
+        if (normalizedKeywordTokens.length === 0) {
             return true;
         }
 
-        const keyword = searchQuery.trim().toLowerCase();
-        return (
-            task.title.toLowerCase().includes(keyword) ||
-            task.description.toLowerCase().includes(keyword) ||
-            task.dependent.toLowerCase().includes(keyword)
-        );
+        const titleText = (task.title ?? "").toLowerCase();
+        const descriptionText = (task.description ?? "").toLowerCase();
+        const dependentText = resolveDependentDisplayName(task, dependents, selfDependentResolution).toLowerCase();
+        const searchableText = `${titleText} ${descriptionText} ${dependentText}`;
+
+        return normalizedKeywordTokens.every((token) => searchableText.includes(token));
     });
 
     const statusTagByStatus = {
@@ -322,24 +348,21 @@ export default function TaskScreen() {
         const parsed = formatDateTime();
         const label = parsed
             ? (() => {
-                const datePart = parsed.toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                });
-                const weekday = parsed.toLocaleDateString(undefined, { weekday: "long" });
-                const time = parsed.toLocaleTimeString(undefined, {
+                const year = parsed.getFullYear();
+                const month = String(parsed.getMonth() + 1).padStart(2, "0");
+                const day = String(parsed.getDate()).padStart(2, "0");
+                const time = parsed.toLocaleTimeString("en-US", {
                     hour: "numeric",
                     minute: "2-digit",
                     hour12: true,
                 });
-                return `${datePart} ${weekday} at ${time}`;
+                return `${year}-${month}-${day} ${time}`;
             })()
-            : [dueDate, dueTime].filter(Boolean).join(" ");
+            : [dueDate, dueTime?.toUpperCase()].filter(Boolean).join(" ");
 
         return (
             <View style={styles.datePill}>
-                <Text style={styles.datePillText}>{label}</Text>
+                <Text style={styles.datePillText} allowFontScaling={false} numberOfLines={1}>{label}</Text>
             </View>
         );
     };
@@ -348,17 +371,17 @@ export default function TaskScreen() {
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={styles.gradient}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            <SafeAreaView style={styles.container}>
-                    <View style={styles.headerContainer}>
-                        <View>
-                            <Text style={styles.headerTitle}>Tasks</Text>
-                            <Text style={styles.subHeader}>Manage caregiving activities</Text>
+            <SafeAreaView style={[styles.container, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }] }>
+                    <View style={[styles.headerContainer, { padding: headerPadding }, compact && styles.headerContainerCompact]}>
+                        <View style={styles.headerTextWrap}>
+                            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>Tasks</Text>
+                            <Text style={[styles.subHeader, { fontSize: subtitleSize }]}>Manage caregiving activities</Text>
                         </View>
-                        {!isDependentAccount && <AddTaskButton />}
+                        {!isDependentAccount && <AddTaskButton style={compact && styles.headerActionButtonCompact} />}
                     </View>
                     
                     {/* Search Bar */}
-                    <View style={styles.searchContainer}>
+                    <View style={[styles.searchContainer, { marginHorizontal: controlsInset }]}>
                         <Feather name="search" size={20} color="#999" />
                         <RNTextInput
                             style={styles.searchInput}
@@ -370,33 +393,35 @@ export default function TaskScreen() {
                     </View>
 
                     {/* Dependents and care spaces dropdown */}
-                    <View style={styles.sortingContainer}>
-                        <Menu
-                            visible={menuVisible1}
-                            onDismiss={() => setMenuVisible1(false)}
-                            anchor={
-                            <Pressable onPress={() => setMenuVisible1(true)}>
-                                <TextInput
-                                value={selectedAssigneeLabel}
-                                mode="outlined"
-                                editable={false}
-                                pointerEvents="none"
-                                right={<TextInput.Icon icon="menu-down" />}
-                                outlineStyle={{ borderRadius: 16, borderWidth: 0.1 }}
-                                style={styles.inputField}
-                                />
-                            </Pressable>
-                            }
-                            contentStyle={styles.dropdownContent}
-                            style={styles.dropdown}
-                        >
+                    <View style={[styles.sortingContainer, { paddingHorizontal: controlsInset, gap: scaleByWidth(width, 10, 8, 14) }, stackControls && styles.sortingContainerCompact]}>
+                        <View style={styles.dropdownColumn}>
+                            <Menu
+                                visible={menuVisible1}
+                                onDismiss={() => setMenuVisible1(false)}
+                                anchor={
+                                <Pressable onPress={() => setMenuVisible1(true)} style={styles.dropdownAnchor}>
+                                    <TextInput
+                                    value={selectedAssigneeLabel}
+                                    mode="outlined"
+                                    editable={false}
+                                    pointerEvents="none"
+                                    right={<TextInput.Icon icon="menu-down" />}
+                                    outlineStyle={{ borderRadius: 16, borderWidth: 0.1 }}
+                                    style={[styles.inputField, { fontSize: selectorTextSize }, narrow && styles.inputFieldCompact]}
+                                    contentStyle={{ fontSize: selectorTextSize }}
+                                    />
+                                </Pressable>
+                                }
+                                contentStyle={styles.dropdownContent}
+                                style={styles.dropdown}
+                            >
                             <Menu.Item
                                 onPress={() => {
                                     setSelectedAssignee("myTasks");
                                     setMenuVisible1(false);
                                 }}
                                 title="My tasks"
-                                titleStyle={styles.dropdownItemText}
+                                titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]}
                             />
                             <Menu.Item
                                 onPress={() => {
@@ -404,7 +429,7 @@ export default function TaskScreen() {
                                     setMenuVisible1(false);
                                 }}
                                 title="Tasks Created by Me"
-                                titleStyle={styles.dropdownItemText}
+                                titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]}
                             />
                             {dependentOptions.map((option) => (
                                 <Menu.Item
@@ -414,38 +439,41 @@ export default function TaskScreen() {
                                         setMenuVisible1(false);
                                     }}
                                     title={option.name}
-                                    titleStyle={styles.dropdownItemText}
+                                    titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]}
                                 />
                             ))}
-                        </Menu>
+                            </Menu>
+                        </View>
 
                         {/* Drop down 2 */}
-                        <Menu
-                            visible={menuVisible2}
-                            onDismiss={() => setMenuVisible2(false)}
-                            anchor={
-                            <Pressable onPress={() => setMenuVisible2(true)}>
-                                <TextInput
-                                value={selectedCareSpaceLabel}
-                                mode="outlined"
-                                editable={false}
-                                pointerEvents="none"
-                                right={<TextInput.Icon icon="menu-down" />}
-                                outlineStyle={{ borderRadius: 16, borderWidth: 0.1 }}
-                                style={styles.inputField}
-                                />
-                            </Pressable>
-                            }
-                            contentStyle={styles.dropdownContent}
-                            style={styles.dropdown2}
-                        >
+                        <View style={styles.dropdownColumn}>
+                            <Menu
+                                visible={menuVisible2}
+                                onDismiss={() => setMenuVisible2(false)}
+                                anchor={
+                                <Pressable onPress={() => setMenuVisible2(true)} style={styles.dropdownAnchor}>
+                                    <TextInput
+                                    value={selectedCareSpaceLabel}
+                                    mode="outlined"
+                                    editable={false}
+                                    pointerEvents="none"
+                                    right={<TextInput.Icon icon="menu-down" />}
+                                    outlineStyle={{ borderRadius: 16, borderWidth: 0.1 }}
+                                    style={[styles.inputField, { fontSize: selectorTextSize }, narrow && styles.inputFieldCompact]}
+                                    contentStyle={{ fontSize: selectorTextSize }}
+                                    />
+                                </Pressable>
+                                }
+                                contentStyle={styles.dropdownContent}
+                                style={styles.dropdown2}
+                            >
                             <Menu.Item
                                 onPress={() => {
                                     setSelectedCareSpaceId(null);
                                     setMenuVisible2(false);
                                 }}
                                 title="All Care Spaces"
-                                titleStyle={styles.dropdownItemText}
+                                titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]}
                             />
                             {careSpaceOptions.map((option) => (
                                 <Menu.Item
@@ -455,44 +483,45 @@ export default function TaskScreen() {
                                         setMenuVisible2(false);
                                     }}
                                     title={option.title}
-                                    titleStyle={styles.dropdownItemText}
+                                    titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]}
                                 />
                             ))}
-                        </Menu>
+                            </Menu>
+                        </View>
                     </View>
                     
                     {/* This is the status button container (Pending, Completed, Missing) */}
-                    <View style={styles.toDoListContainer}>
-                        <View style={styles.toDoButtons}>
+                    <View style={[styles.toDoListContainer, { paddingHorizontal: controlsInset, paddingVertical: blockPadding }]}>
+                        <View style={[styles.toDoButtons, stackControls && styles.toDoButtonsCompact]}>
                             <Pressable 
-                                style={[styles.pendingButton, selectedStatus === "pending" && styles.activeButton]} 
+                                style={[styles.pendingButton, { minWidth: statusPillMinWidth }, selectedStatus === "pending" && styles.activeButton]} 
                                 onPress={() => {
                                     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                                     setSelectedStatus("pending");
                                 }}
                             >
-                                <Feather name="clock" size={16} color={selectedStatus === "pending" ? "white" : "black"} />
-                                <Text style={selectedStatus === "pending" && styles.activeButtonText}>Pending</Text>
+                                <Feather name="clock" size={statusIconSize} color={selectedStatus === "pending" ? "white" : "black"} />
+                                <Text numberOfLines={1} style={[styles.statusButtonLabel, { fontSize: statusLabelTextSize }, selectedStatus === "pending" && styles.activeButtonText]}>Pending</Text>
                             </Pressable>
                             <Pressable 
-                                style={[styles.completedButton, selectedStatus === "completed" && styles.activeButton]} 
+                                style={[styles.completedButton, { minWidth: statusPillMinWidth }, selectedStatus === "completed" && styles.activeButton]} 
                                 onPress={() => {
                                     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                                     setSelectedStatus("completed");
                                 }}
                             >
-                                <Feather name="check-circle" size={16} color={selectedStatus === "completed" ? "white" : "black"} />
-                                <Text style={selectedStatus === "completed" && styles.activeButtonText}>Completed</Text>
+                                <Feather name="check-circle" size={statusIconSize} color={selectedStatus === "completed" ? "white" : "black"} />
+                                <Text numberOfLines={1} style={[styles.statusButtonLabel, { fontSize: statusLabelTextSize }, selectedStatus === "completed" && styles.activeButtonText]}>Completed</Text>
                             </Pressable>
                             <Pressable 
-                                style={[styles.missingButton, selectedStatus === "missing" && styles.activeButton]} 
+                                style={[styles.missingButton, { minWidth: statusPillMinWidth }, selectedStatus === "missing" && styles.activeButton]} 
                                 onPress={() => {
                                     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                                     setSelectedStatus("missing");
                                 }}
                             >
-                                <AntDesign name="exclamation-circle" size={16} color={selectedStatus === "missing" ? "white" : "black"} />
-                                <Text style={selectedStatus === "missing" && styles.activeButtonText}>Missing</Text>
+                                <AntDesign name="exclamation-circle" size={statusIconSize} color={selectedStatus === "missing" ? "white" : "black"} />
+                                <Text numberOfLines={1} style={[styles.statusButtonLabel, { fontSize: statusLabelTextSize }, selectedStatus === "missing" && styles.activeButtonText]}>Missing</Text>
                             </Pressable>
                         </View>
 
@@ -532,10 +561,18 @@ export default function TaskScreen() {
                                         <>
                                             {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
                                             {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
-                                            {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
+                                            {(() => {
+                                                const recurringBase = getRecurringPatternBase(task.recurringPattern);
+                                                return recurringBase ? recurringTagByPattern[recurringBase as keyof typeof recurringTagByPattern] : null;
+                                            })()}
                                         </>
                                     }
-                                    dateTag={renderDateTag(task.dueDate, task.dueTime)}
+                                    dateTag={
+                                        <>
+                                            <RecurringDayStatusTags recurringPattern={task.recurringPattern} />
+                                            {renderDateTag(task.dueDate, task.dueTime)}
+                                        </>
+                                    }
                                     onEdit={() =>
                                         router.push({
                                             pathname: "/editTaskPage",
@@ -657,6 +694,21 @@ export const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
+        gap: 10,
+    },
+
+    headerContainerCompact: {
+        alignItems: "flex-start",
+        flexWrap: "wrap",
+    },
+
+    headerTextWrap: {
+        flexShrink: 1,
+        minWidth: 0,
+    },
+
+    headerActionButtonCompact: {
+        alignSelf: "flex-start",
     },
 
     headerTitle: {
@@ -696,7 +748,7 @@ export const styles = StyleSheet.create({
 
     datePillText: {
         color: "#000000",
-        fontSize: 14,
+        fontSize: 12,
     },
 
     subHeader: {
@@ -707,25 +759,25 @@ export const styles = StyleSheet.create({
 
     // Dropdown styles
     inputField: {
-        width: 185,
+        width: "100%",
         height: 35,
         backgroundColor: "#ffffff",
     },
 
+    inputFieldCompact: {
+        height: 34,
+    },
+
     dropdown: {
-        padding: 12,
+        padding: 0,
         borderRadius: 16,
-        width: "48%",
-        marginTop: 30,
-        marginHorizontal: -10,
+        marginTop: 35,
     },
 
     dropdown2: {
-        padding: 12,
+        padding: 0,
         borderRadius: 16,
-        width: "48%",
-        marginTop: 30,
-        marginHorizontal: 11,
+        marginTop: 35,
     },
 
     dropdownContent: {
@@ -743,9 +795,25 @@ export const styles = StyleSheet.create({
         alignItems: "center",
         width: "100%",
         justifyContent: "space-between",
-        padding: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 8,
         paddingTop: 0,
         paddingBottom: 0,
+        gap: 10,
+    },
+
+    sortingContainerCompact: {
+        flexDirection: "column",
+        alignItems: "stretch",
+    },
+
+    dropdownColumn: {
+        flex: 1,
+        minWidth: 0,
+    },
+
+    dropdownAnchor: {
+        width: "100%",
     },
 
     // To-do list container
@@ -760,7 +828,12 @@ export const styles = StyleSheet.create({
         backgroundColor: "#ffffff",
         borderRadius: 100,
         padding: 8,
-        // paddingTop: 0,
+        gap: 6,
+    },
+
+    toDoButtonsCompact: {
+        borderRadius: 16,
+        flexWrap: "wrap",
     },
 
     // Status filter buttons
@@ -768,10 +841,12 @@ export const styles = StyleSheet.create({
         fontSize: 16,
         flexDirection: "row",
         alignItems: "center",
-        height: "100%",
-        width: "auto",
-        gap: 8,
-        padding: 10,
+        justifyContent: "center",
+        flex: 1,
+        minWidth: 96,
+        gap: 6,
+        paddingVertical: 10,
+        paddingHorizontal: 8,
         borderRadius: 100,
     },
 
@@ -779,10 +854,12 @@ export const styles = StyleSheet.create({
         fontSize: 16,
         flexDirection: "row",
         alignItems: "center",
-        height: "100%",
-        width: "auto",
-        gap: 8,
-        padding: 10,
+        justifyContent: "center",
+        flex: 1,
+        minWidth: 96,
+        gap: 6,
+        paddingVertical: 10,
+        paddingHorizontal: 8,
         borderRadius: 100,
     },
 
@@ -790,11 +867,19 @@ export const styles = StyleSheet.create({
         fontSize: 16,
         flexDirection: "row",
         alignItems: "center",
-        height: "100%",
-        width: "auto",
-        gap: 8,
-        padding: 10,
+        justifyContent: "center",
+        flex: 1,
+        minWidth: 96,
+        gap: 6,
+        paddingVertical: 10,
+        paddingHorizontal: 8,
         borderRadius: 100,
+    },
+
+    statusButtonLabel: {
+        fontSize: 14,
+        color: "#000000",
+        flexShrink: 1,
     },
 
     activeButton: {

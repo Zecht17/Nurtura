@@ -39,7 +39,19 @@ export default function EditProfileScreen() {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [sexMenuVisible, setSexMenuVisible] = useState(false);
     const [phoneNumber, setPhoneNumber] = useState('');
-    const [formError, setFormError] = useState<string | null>(null);
+    type FieldErrors = {
+        firstName?: string;
+        middleName?: string;
+        lastName?: string;
+        username?: string;
+        email?: string;
+        sex?: string;
+        birthdate?: string;
+        phoneNumber?: string;
+        general?: string;
+    };
+
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
     const isDatePickerSupported = Platform.OS !== 'web';
 
     useEffect(() => {
@@ -108,26 +120,102 @@ export default function EditProfileScreen() {
         setShowDatePicker(false);
     };
 
-    const validateForm = () => {
-        if (!firstName.trim() || !lastName.trim() || !username.trim() || !email.trim() || !sex.trim() || !birthdate.trim()) {
-            return 'First name, last name, username, email, sex, and birthdate are required.';
+    const validateForm = (): FieldErrors => {
+        const errors: FieldErrors = {};
+
+        const nameRegex = /^[A-Za-z\s'-]+$/;
+
+        if (!firstName.trim()) {
+            errors.firstName = 'First name is required.';
+        } else if (!nameRegex.test(firstName.trim())) {
+            errors.firstName = 'First name can only contain letters, spaces, apostrophes, and hyphens.';
         }
 
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate.trim())) {
-            return 'Birthdate must be in YYYY-MM-DD format.';
+        if (middleName.trim() && !nameRegex.test(middleName.trim())) {
+            errors.middleName = 'Middle name can only contain letters, spaces, apostrophes, and hyphens.';
         }
 
-        return null;
+        if (!lastName.trim()) {
+            errors.lastName = 'Last name is required.';
+        } else if (!nameRegex.test(lastName.trim())) {
+            errors.lastName = 'Last name can only contain letters, spaces, apostrophes, and hyphens.';
+        }
+
+        if (!username.trim()) {
+            errors.username = 'Username is required.';
+        }
+
+        if (!email.trim()) {
+            errors.email = 'Email is required.';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+            errors.email = 'Enter a valid email address (example: name@email.com).';
+        }
+
+        if (!sex.trim()) {
+            errors.sex = 'Please select a sex.';
+        }
+
+        if (!birthdate.trim()) {
+            errors.birthdate = 'Birthdate is required.';
+        } else if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate.trim())) {
+            errors.birthdate = 'Birthdate must be in YYYY-MM-DD format.';
+        }
+
+        return errors;
+    };
+
+    const mapServerErrorToFieldErrors = (message: string): FieldErrors => {
+        const normalized = message.toLowerCase();
+
+        if (normalized.includes('first_name') || normalized.includes('first name') || normalized.includes('pattern')) {
+            return {
+                firstName: 'First name can only contain letters, spaces, apostrophes, and hyphens.',
+            };
+        }
+
+        if (normalized.includes('last_name') || normalized.includes('last name')) {
+            return {
+                lastName: 'Last name can only contain letters, spaces, apostrophes, and hyphens.',
+            };
+        }
+
+        if (normalized.includes('middle_name') || normalized.includes('middle name')) {
+            return {
+                middleName: 'Middle name can only contain letters, spaces, apostrophes, and hyphens.',
+            };
+        }
+
+        if (normalized.includes('email')) {
+            return {
+                email: 'Please enter a valid email address.',
+            };
+        }
+
+        if (normalized.includes('username')) {
+            return {
+                username: 'Please enter a valid username.',
+            };
+        }
+
+        if (normalized.includes('birthdate') || normalized.includes('date')) {
+            return {
+                birthdate: 'Please enter a valid birthdate in YYYY-MM-DD format.',
+            };
+        }
+
+        return {
+            general: 'We could not update your profile. Please review your inputs and try again.',
+        };
     };
 
     const handleSave = async () => {
-        const validationError = validateForm();
-        if (validationError) {
-            setFormError(validationError);
+        const validationErrors = validateForm();
+        if (Object.keys(validationErrors).length > 0) {
+            setFieldErrors(validationErrors);
             return;
         }
 
-        setFormError(null);
+        setFieldErrors({});
         clearProfileError();
 
         try {
@@ -162,7 +250,8 @@ export default function EditProfileScreen() {
             Alert.alert('Success', 'Your profile was updated.');
             router.replace('/profileAndAccount');
         } catch (err) {
-            setFormError((err as Error).message || 'Unable to update profile');
+            const message = (err as Error).message || 'Unable to update profile';
+            setFieldErrors(mapServerErrorToFieldErrors(message));
         }
     };
 
@@ -189,59 +278,88 @@ export default function EditProfileScreen() {
                                 </View>
                             ) : null}
 
-                            {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
-                            {!formError && profileError ? <Text style={styles.errorText}>{profileError}</Text> : null}
+                            {fieldErrors.general ? <Text style={styles.errorText}>{fieldErrors.general}</Text> : null}
+                            {!fieldErrors.general && profileError ? <Text style={styles.errorText}>{profileError}</Text> : null}
 
                             <Text style={styles.inputTitle}>First Name</Text>
                             <TextInput
                                 mode="outlined"
                                 value={firstName}
-                                onChangeText={setFirstName}
+                                onChangeText={(value) => {
+                                    setFirstName(value);
+                                    if (fieldErrors.firstName) {
+                                        setFieldErrors((prev) => ({ ...prev, firstName: undefined }));
+                                    }
+                                }}
                                 placeholder="First Name"
                                 style={styles.inputField}
                                 outlineStyle={styles.outline}
                                 disabled={profileLoading || updatingProfile}
                             />
+                            {fieldErrors.firstName ? <Text style={styles.fieldErrorText}>{fieldErrors.firstName}</Text> : null}
 
                             <Text style={styles.inputTitle}>Middle Name (Optional)</Text>
                             <TextInput
                                 mode="outlined"
                                 value={middleName}
-                                onChangeText={setMiddleName}
+                                onChangeText={(value) => {
+                                    setMiddleName(value);
+                                    if (fieldErrors.middleName) {
+                                        setFieldErrors((prev) => ({ ...prev, middleName: undefined }));
+                                    }
+                                }}
                                 placeholder="Middle Name"
                                 style={styles.inputField}
                                 outlineStyle={styles.outline}
                                 disabled={profileLoading || updatingProfile}
                             />
+                            {fieldErrors.middleName ? <Text style={styles.fieldErrorText}>{fieldErrors.middleName}</Text> : null}
 
                             <Text style={styles.inputTitle}>Last Name</Text>
                             <TextInput
                                 mode="outlined"
                                 value={lastName}
-                                onChangeText={setLastName}
+                                onChangeText={(value) => {
+                                    setLastName(value);
+                                    if (fieldErrors.lastName) {
+                                        setFieldErrors((prev) => ({ ...prev, lastName: undefined }));
+                                    }
+                                }}
                                 placeholder="Last Name"
                                 style={styles.inputField}
                                 outlineStyle={styles.outline}
                                 disabled={profileLoading || updatingProfile}
                             />
+                            {fieldErrors.lastName ? <Text style={styles.fieldErrorText}>{fieldErrors.lastName}</Text> : null}
 
                             <Text style={styles.inputTitle}>Username</Text>
                             <TextInput
                                 mode="outlined"
                                 value={username}
-                                onChangeText={setUsername}
+                                onChangeText={(value) => {
+                                    setUsername(value);
+                                    if (fieldErrors.username) {
+                                        setFieldErrors((prev) => ({ ...prev, username: undefined }));
+                                    }
+                                }}
                                 placeholder="Username"
                                 autoCapitalize="none"
                                 style={styles.inputField}
                                 outlineStyle={styles.outline}
                                 disabled={profileLoading || updatingProfile}
                             />
+                            {fieldErrors.username ? <Text style={styles.fieldErrorText}>{fieldErrors.username}</Text> : null}
 
                             <Text style={styles.inputTitle}>Email</Text>
                             <TextInput
                                 mode="outlined"
                                 value={email}
-                                onChangeText={setEmail}
+                                onChangeText={(value) => {
+                                    setEmail(value);
+                                    if (fieldErrors.email) {
+                                        setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                                    }
+                                }}
                                 placeholder="example@email.com"
                                 autoCapitalize="none"
                                 keyboardType="email-address"
@@ -249,6 +367,7 @@ export default function EditProfileScreen() {
                                 outlineStyle={styles.outline}
                                 disabled={profileLoading || updatingProfile}
                             />
+                            {fieldErrors.email ? <Text style={styles.fieldErrorText}>{fieldErrors.email}</Text> : null}
 
                             <Text style={styles.inputTitle}>Sex</Text>
                             <Menu
@@ -275,12 +394,18 @@ export default function EditProfileScreen() {
                                 <Menu.Item onPress={() => { setSex('male'); setSexMenuVisible(false); }} title="Male" />
                                 <Menu.Item onPress={() => { setSex('other'); setSexMenuVisible(false); }} title="Other" />
                             </Menu>
+                            {fieldErrors.sex ? <Text style={styles.fieldErrorText}>{fieldErrors.sex}</Text> : null}
 
                             <Text style={styles.inputTitle}>Birthdate</Text>
                             <TextInput
                                 mode="outlined"
                                 value={birthdate}
-                                onChangeText={handleBirthdateChange}
+                                onChangeText={(value) => {
+                                    handleBirthdateChange(value);
+                                    if (fieldErrors.birthdate) {
+                                        setFieldErrors((prev) => ({ ...prev, birthdate: undefined }));
+                                    }
+                                }}
                                 placeholder="YYYY-MM-DD"
                                 keyboardType="phone-pad"
                                 right={<TextInput.Icon icon="calendar" onPress={() => {
@@ -292,12 +417,18 @@ export default function EditProfileScreen() {
                                 outlineStyle={styles.outline}
                                 disabled={profileLoading || updatingProfile}
                             />
+                            {fieldErrors.birthdate ? <Text style={styles.fieldErrorText}>{fieldErrors.birthdate}</Text> : null}
 
                             <Text style={styles.inputTitle}>Phone Number (Optional)</Text>
                             <TextInput
                                 mode="outlined"
                                 value={phoneNumber}
-                                onChangeText={setPhoneNumber}
+                                onChangeText={(value) => {
+                                    setPhoneNumber(value);
+                                    if (fieldErrors.phoneNumber) {
+                                        setFieldErrors((prev) => ({ ...prev, phoneNumber: undefined }));
+                                    }
+                                }}
                                 placeholder="09123456789"
                                 keyboardType="phone-pad"
                                 style={styles.inputField}
@@ -390,6 +521,12 @@ const styles = StyleSheet.create({
         color: '#b91c1c',
         marginBottom: 12,
         fontSize: 13,
+    },
+    fieldErrorText: {
+        color: '#b91c1c',
+        fontSize: 12,
+        marginTop: -8,
+        marginBottom: 10,
     },
     inputTitle: {
         fontSize: 13,

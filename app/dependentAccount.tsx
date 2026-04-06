@@ -5,11 +5,12 @@ import Octicons from '@expo/vector-icons/Octicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ChangePasswordModal from '../components/modals/changePasswordModal';
 import DeleteDependentModal from '../components/modals/deleteDependent';
 import { useDependents } from '../context/DependentContext';
+import { getResponsiveTokens } from '../utils/responsive';
 
 const formatDate = (value?: string) => {
     if (!value) {
@@ -40,6 +41,8 @@ const toDisplaySex = (value?: string) => {
 
 export default function DependentAccountScreen() {
     const router = useRouter();
+    const { width } = useWindowDimensions();
+    const tokens = getResponsiveTokens(width);
     const params = useLocalSearchParams<{ dependentId?: string | string[] }>();
     const dependentIdParam = Array.isArray(params.dependentId) ? params.dependentId[0] : params.dependentId;
 
@@ -149,20 +152,20 @@ export default function DependentAccountScreen() {
     return (
         <LinearGradient colors={['#E3F2FD', '#F3E5F8', '#E8E4F8']} style={styles.gradient}>
             <ScrollView>
-                <SafeAreaView style={styles.container}>
+                <SafeAreaView style={[styles.container, { maxWidth: tokens.containerMaxWidth, alignSelf: 'center', width: '100%', padding: tokens.pagePadding }] }>
                     <View style={styles.headerContainer}>
                         <Pressable onPress={() => router.back()} hitSlop={12}>
                             <Feather name="arrow-left" size={24} color="black" />
                         </Pressable>
                         <View>
-                            <Text style={styles.headerTitle}>Dependent Profile</Text>
-                            <Text style={styles.subHeader}>Manage dependent information and security</Text>
+                            <Text style={[styles.headerTitle, { fontSize: tokens.title }]}>Dependent Profile</Text>
+                            <Text style={[styles.subHeader, { fontSize: tokens.subtitle }]}>Manage dependent information and security</Text>
                         </View>
                     </View>
 
                     <View style={styles.accInfoContainer}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 5 }}>
-                            <Text style={styles.accInfoTitle}>Dependent Information</Text>
+                            <Text style={[styles.accInfoTitle, { fontSize: tokens.subtitle }]}>Dependent Information</Text>
                             <Pressable
                                 onPress={() => {
                                     if (!dependentIdParam) {
@@ -180,113 +183,113 @@ export default function DependentAccountScreen() {
                                 ]}
                             >
                                 <Ionicons name="pencil-outline" size={16} color="#000000" />
-                                <Text>Edit</Text>
+                                <Text style={{ fontSize: tokens.menuText }}>Edit</Text>
                             </Pressable>
                         </View>
 
-                        <Text style={styles.accInfoSubTitle}>Dependent profile details and contact information</Text>
+                        <Text style={[styles.accInfoSubTitle, { fontSize: tokens.body }]}>Dependent profile details and contact information</Text>
 
                         {loadingDependentData && !dependentData ? (
                             <View style={styles.feedbackRow}>
                                 <ActivityIndicator size="small" color="#7C6FDC" />
-                                <Text style={styles.feedbackText}>Loading dependent...</Text>
+                                <Text style={[styles.feedbackText, { fontSize: tokens.body }]}>Loading dependent...</Text>
                             </View>
                         ) : null}
 
-                        {dependentDataError ? <Text style={styles.errorText}>{dependentDataError}</Text> : null}
+                        {dependentDataError ? <Text style={[styles.errorText, { fontSize: tokens.chipText }]}>{dependentDataError}</Text> : null}
 
                         {!loadingDependentData && !dependentData ? (
-                            <Text style={styles.errorText}>Dependent not found.</Text>
+                            <Text style={[styles.errorText, { fontSize: tokens.chipText }]}>Dependent not found.</Text>
                         ) : null}
 
                         <View style={styles.fieldGroup}>
-                            <Text style={styles.accCredTitle}>Username:</Text>
+                            <Text style={[styles.accCredTitle, { fontSize: tokens.subtitle }]}>Username:</Text>
                             <View style={styles.inputContainer}>
                                 <Octicons name="person" size={16} color="#7C6FDC" />
-                                <Text style={styles.accCredInfo}>{dependentData?.username || '-'}</Text>
+                                <Text style={[styles.accCredInfo, { fontSize: tokens.body }]}>{dependentData?.username || '-'}</Text>
                             </View>
                         </View>
 
                         <View style={styles.fieldGroup}>
-                            <Text style={styles.accCredTitle}>First Name:</Text>
+                            <Text style={[styles.accCredTitle, { fontSize: tokens.subtitle }]}>First Name:</Text>
                             <View style={styles.inputContainer}>
                                 <Octicons name="person" size={16} color="#7C6FDC" />
-                                <Text style={styles.accCredInfo}>{dependentData?.firstName || '-'}</Text>
+                                <Text style={[styles.accCredInfo, { fontSize: tokens.body }]}>{dependentData?.firstName || '-'}</Text>
                             </View>
                         </View>
 
                         <View style={styles.fieldGroup}>
-                            <Text style={styles.accCredTitle}>Last Name:</Text>
+                            <Text style={[styles.accCredTitle, { fontSize: tokens.subtitle }]}>Last Name:</Text>
                             <View style={styles.inputContainer}>
                                 <Octicons name="person" size={16} color="#7C6FDC" />
-                                <Text style={styles.accCredInfo}>{dependentData?.lastName || '-'}</Text>
+                                <Text style={[styles.accCredInfo, { fontSize: tokens.body }]}>{dependentData?.lastName || '-'}</Text>
                             </View>
                         </View>
 
                         <View style={styles.fieldGroup}>
-                            <Text style={styles.accCredTitle}>Full Name:</Text>
+                            <Text style={[styles.accCredTitle, { fontSize: tokens.subtitle }]}>Full Name:</Text>
                             <View style={styles.inputContainer}>
                                 <Octicons name="person" size={16} color="#7C6FDC" />
-                                <Text style={styles.accCredInfo}>{fullName}</Text>
+                                <Text style={[styles.accCredInfo, { fontSize: tokens.body }]}>{fullName}</Text>
                             </View>
                         </View>
 
                         <View style={styles.fieldGroup}>
-                            <Text style={styles.accCredTitle}>Email:</Text>
+                            <Text style={[styles.accCredTitle, { fontSize: tokens.subtitle }]}>Email:</Text>
                             <View style={styles.inputContainer}>
                                 <Ionicons name="mail-outline" size={16} color="#7C6FDC" />
-                                <Text style={styles.accCredInfo}>{dependentData?.email || '-'}</Text>
+                                <Text style={[styles.accCredInfo, { fontSize: tokens.body }]}>{dependentData?.email || '-'}</Text>
                             </View>
                         </View>
 
                         <View style={styles.fieldGroup}>
-                            <Text style={styles.accCredTitle}>Sex:</Text>
+                            <Text style={[styles.accCredTitle, { fontSize: tokens.subtitle }]}>Sex:</Text>
                             <View style={styles.inputContainer}>
                                 <Ionicons name="person-circle-outline" size={16} color="#7C6FDC" />
-                                <Text style={styles.accCredInfo}>{toDisplaySex(dependentData?.sex)}</Text>
+                                <Text style={[styles.accCredInfo, { fontSize: tokens.body }]}>{toDisplaySex(dependentData?.sex)}</Text>
                             </View>
                         </View>
 
                         <View style={styles.fieldGroup}>
-                            <Text style={styles.accCredTitle}>Phone Number:</Text>
+                            <Text style={[styles.accCredTitle, { fontSize: tokens.subtitle }]}>Phone Number:</Text>
                             <View style={styles.inputContainer}>
                                 <Ionicons name="call-outline" size={16} color="#7C6FDC" />
-                                <Text style={styles.accCredInfo}>{dependentData?.phoneNumber || '-'}</Text>
+                                <Text style={[styles.accCredInfo, { fontSize: tokens.body }]}>{dependentData?.phoneNumber || '-'}</Text>
                             </View>
                         </View>
 
                         <View style={styles.fieldGroup}>
-                            <Text style={styles.accCredTitle}>Birth Date:</Text>
+                            <Text style={[styles.accCredTitle, { fontSize: tokens.subtitle }]}>Birth Date:</Text>
                             <View style={styles.inputContainer}>
                                 <Ionicons name="calendar-outline" size={16} color="#7C6FDC" />
-                                <Text style={styles.accCredInfo}>{formatDate(dependentData?.birthDate)}</Text>
+                                <Text style={[styles.accCredInfo, { fontSize: tokens.body }]}>{formatDate(dependentData?.birthDate)}</Text>
                             </View>
                         </View>
 
                         <View style={styles.fieldGroup}>
-                            <Text style={styles.accCredTitle}>Care Notes:</Text>
+                            <Text style={[styles.accCredTitle, { fontSize: tokens.subtitle }]}>Care Notes:</Text>
                             <View style={styles.inputContainer}>
                                 <Ionicons name="document-text-outline" size={16} color="#7C6FDC" />
-                                <Text style={styles.accCredInfo}>{dependentData?.careNotes || '-'}</Text>
+                                <Text style={[styles.accCredInfo, { fontSize: tokens.body }]}>{dependentData?.careNotes || '-'}</Text>
                             </View>
                         </View>
                     </View>
 
                     <View style={styles.accInfoContainer}>
-                        <Text style={styles.accInfoTitle}>Security</Text>
-                        <Text style={styles.accInfoSubTitle}>Manage dependent account password</Text>
+                        <Text style={[styles.accInfoTitle, { fontSize: tokens.subtitle }]}>Security</Text>
+                        <Text style={[styles.accInfoSubTitle, { fontSize: tokens.body }]}>Manage dependent account password</Text>
                         <Pressable style={styles.changePassButton} onPress={() => setShowChangePassword(true)}>
                             <Ionicons name="shield-outline" size={16} color="#111" />
-                            <Text style={styles.editButtonText}>Change Password</Text>
+                            <Text style={[styles.editButtonText, { fontSize: tokens.menuText }]}>Change Password</Text>
                         </Pressable>
                     </View>
 
                     <View style={styles.accInfoContainerDanger}>
-                        <Text style={styles.accInfoTitle}>Danger Zone</Text>
-                        <Text style={styles.accInfoSubTitle}>Irreversible account actions</Text>
+                        <Text style={[styles.accInfoTitle, { fontSize: tokens.subtitle }]}>Danger Zone</Text>
+                        <Text style={[styles.accInfoSubTitle, { fontSize: tokens.body }]}>Irreversible account actions</Text>
                         <Pressable style={styles.dangerButton} onPress={() => setShowDeleteDependent(true)}>
                             <AntDesign name="exclamation-circle" size={16} color="white" />
-                            <Text style={styles.dangerButtonText}>Delete Dependent</Text>
+                            <Text style={[styles.dangerButtonText, { fontSize: tokens.menuText }]}>Delete Dependent</Text>
                         </Pressable>
                     </View>
 

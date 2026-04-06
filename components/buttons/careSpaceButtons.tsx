@@ -1,6 +1,7 @@
 import CreateCarespaceModal from "@/components/modals/createCarespaceModal";
 import JoinCareSpaceModal from "@/components/modals/joinCarespaceModal";
 import type { CreateCareSpacePayload } from "@/context/CareSpacesContext";
+import { getResponsiveTokens, scaleByWidth } from "@/utils/responsive";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { LinearGradient } from "expo-linear-gradient";
@@ -10,6 +11,7 @@ import {
     StyleProp,
     StyleSheet,
     Text,
+    useWindowDimensions,
     View,
     ViewStyle,
 } from "react-native";
@@ -22,6 +24,9 @@ type Props = {
 };
 
 export default function CareButtons({ createStyle, joinStyle, onCreateCareSpace, onJoinCareSpace }: Props) {
+    const { width } = useWindowDimensions();
+    const tokens = getResponsiveTokens(width);
+    const textSize = scaleByWidth(width, 14, 12, 14);
     const [isCreateVisible, setIsCreateVisible] = useState(false);
     const [isJoinVisible, setIsJoinVisible] = useState(false);
 
@@ -43,7 +48,7 @@ export default function CareButtons({ createStyle, joinStyle, onCreateCareSpace,
                 >
                     <View style={styles.createButton}>
                         <FontAwesome6 name="add" size={16} color="white" />
-                        <Text style={styles.cbuttonText}>Create Care Space</Text>
+                        <Text numberOfLines={1} style={[styles.cbuttonText, { fontSize: textSize || tokens.bodySmall }]}>Create Care Space</Text>
                     </View>
                 </LinearGradient>
             </Pressable>
@@ -64,7 +69,7 @@ export default function CareButtons({ createStyle, joinStyle, onCreateCareSpace,
                 >
                     <View style={styles.joinButton}>
                         <AntDesign name="user-add" size={16} color="#7C6FDC" />
-                        <Text style={styles.jbuttonText}>Join Care Space</Text>
+                        <Text numberOfLines={1} style={[styles.jbuttonText, { fontSize: textSize || tokens.bodySmall }]}>Join Care Space</Text>
                     </View>
                 </LinearGradient>
             </Pressable>
@@ -96,6 +101,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
+        gap: 10,
     },
 
     gradientButton: {
@@ -104,15 +110,15 @@ const styles = StyleSheet.create({
     },
 
     createButtonGradient: {
-        marginRight: 8,
         borderColor: "#7C6FDC",
         borderWidth: 1,
+        minWidth: 0,
     },
 
     joinButtonGradient: {
-        marginLeft: 8,
         borderColor: "#7C6FDC",
         borderWidth: 1,
+        minWidth: 0,
     },
 
     buttonContent: {
@@ -134,33 +140,32 @@ const styles = StyleSheet.create({
     },
 
     createButton: {
-        // backgroundColor: "#7C6FDC",
         padding: 10,
-        // paddingHorizontal: 20,
         borderRadius: 14,
         flexDirection: "row",
         alignItems: "center",
         gap: 10,
+        minWidth: 0,
     },
 
     cbuttonText: {
         color: "#fff",
-        fontSize: 16,
-        // fontWeight: "bold",
+        fontSize: 14,
+        flexShrink: 1,
     },
 
     joinButton: {
-        // backgroundColor: "#E0E0E0",
         padding: 10,
         borderRadius: 14,
         flexDirection: "row",
         alignItems: "center",
         gap: 10,
+        minWidth: 0,
     },
 
     jbuttonText: {
         color: "#7C6FDC",
-        fontSize: 16,
-        // fontWeight: "bold",
+        fontSize: 14,
+        flexShrink: 1,
     },
 });

@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 export default function WeeklyRecurringStatus() {
     return (
         <View style={styles.recurring}>
-            <Text style={styles.weeklyText}>Weekly</Text>
+            <Text style={styles.weeklyText} allowFontScaling={false}>Weekly</Text>
         </View>
     );
 }
@@ -17,6 +17,7 @@ const styles = StyleSheet.create({
     },
     weeklyText: {
         color: "#ffffff",
-        fontSize: 14,
+        fontSize: 12,
+        flexShrink: 1,
     },
 });

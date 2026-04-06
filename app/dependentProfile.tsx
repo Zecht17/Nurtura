@@ -2,15 +2,24 @@ import AddDependentsButton from "@/components/buttons/addDependents";
 import DependentCard from "@/components/cards/dependentCard";
 import { NoDependentCard } from "@/components/cards/noDependent";
 import DeleteDependentModal from "@/components/modals/deleteDependent";
+import { getResponsiveTokens } from "@/utils/responsive";
 import { LinearGradient } from "expo-linear-gradient";
 import { usePathname, useRouter } from "expo-router";
 import React from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Dependent, useDependents } from "../context/DependentContext";
 
 export default function dependentProfile() {
     const { dependents: dependentList, loadingDependents, dependentsError, fetchMyDependents, deleteDependentProfile } = useDependents();
+    const { width } = useWindowDimensions();
+    const tokens = getResponsiveTokens(width);
+    const compact = width < tokens.compactBreakpoint;
+    const contentMaxWidth = tokens.containerMaxWidth;
+    const headerPadding = tokens.pagePadding;
+    const titleSize = tokens.title;
+    const subtitleSize = tokens.subtitle;
+    const narrowHeader = width < 390;
     const router = useRouter();
     const pathname = usePathname();
     const [deleteTarget, setDeleteTarget] = React.useState<Dependent | null>(null);
@@ -128,13 +137,13 @@ export default function dependentProfile() {
                         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
                     }
                 >
-                    <View style={dependents.container}>
-                        <View style={dependents.headerContainer}>
-                            <View>
-                                <Text style={dependents.headerTitle}>Dependent Profile</Text>
-                                <Text style={dependents.subHeader}>Manage your dependent's{"\n"}information and preferences</Text>
+                    <View style={[dependents.container, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }] }>
+                        <View style={[dependents.headerContainer, { padding: headerPadding }, (compact || narrowHeader) && dependents.headerContainerCompact]}>
+                            <View style={[dependents.headerTextWrap, narrowHeader && dependents.headerTextWrapNarrow]}>
+                                <Text style={[dependents.headerTitle, { fontSize: titleSize }]}>Dependent Profile</Text>
+                                <Text style={[dependents.subHeader, { fontSize: subtitleSize }]}>Manage your dependent's{"\n"}information and preferences</Text>
                             </View>
-                            <AddDependentsButton />
+                            <AddDependentsButton style={(compact || narrowHeader) && dependents.addButtonCompact} />
                         </View>
 
                         {!!dependentsError && (
@@ -219,6 +228,24 @@ const dependents = StyleSheet.create({
         justifyContent: "space-between",
         alignItems: "center",
         gap: 10,
+    },
+
+    headerContainerCompact: {
+        alignItems: "flex-start",
+        flexWrap: "wrap",
+    },
+
+    headerTextWrap: {
+        minWidth: 0,
+        flexShrink: 1,
+    },
+
+    headerTextWrapNarrow: {
+        width: "100%",
+    },
+
+    addButtonCompact: {
+        alignSelf: "flex-start",
     },
 
     headerTitle: {

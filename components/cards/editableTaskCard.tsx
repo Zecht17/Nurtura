@@ -1,7 +1,8 @@
+import { getResponsiveTokens } from "@/utils/responsive";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 type TaskCardProps = {
     value: string;
@@ -37,6 +38,10 @@ export default function EditableTaskCard({
     onDelete,
     editable = true,
 }: TaskCardProps) {
+    const { width } = useWindowDimensions();
+    const tokens = getResponsiveTokens(width);
+    const cardTitleSize = Math.max(20, Math.min(24, width * 0.055));
+    const cardBodySize = Math.max(13, Math.min(16, width * 0.04));
     const selectionHighlight = editable && onRadioPress == null && selectedTask === value;
     const radioFilled = isCompleted || selectionHighlight;
 
@@ -69,10 +74,10 @@ export default function EditableTaskCard({
                     </View>
                 )}
                 <View style={styles.content}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                        <Text style={styles.title}>{title}</Text>
+                    <View style={styles.headerRow}>
+                        <Text style={[styles.title, { fontSize: cardTitleSize }]} allowFontScaling={false}>{title}</Text>
                         {editable ? (
-                            <View style={{ flexDirection: "row", gap: 10 }}>
+                            <View style={styles.actionsRow}>
                                 <Pressable onPress={onEdit} hitSlop={8}>
                                     <MaterialCommunityIcons name="pencil-outline" size={21} color="#000000" />
                                 </Pressable>
@@ -82,8 +87,8 @@ export default function EditableTaskCard({
                             </View>
                         ) : null}
                     </View>
-                    <Text style={styles.subHeader}>{dependent}</Text>
-                    <Text style={styles.subHeader}>{description}</Text>
+                    <Text style={[styles.subHeader, { fontSize: cardBodySize }]} allowFontScaling={false}>{dependent}</Text>
+                    <Text style={[styles.subHeader, { fontSize: cardBodySize }]} allowFontScaling={false}>{description}</Text>
                 </View>
             </View>
             {statusTags ? <View style={styles.statusRow}>{statusTags}</View> : null}
@@ -135,21 +140,37 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
     },
+    headerRow: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        gap: 10,
+    },
+    actionsRow: {
+        flexDirection: "row",
+        gap: 10,
+        flexShrink: 0,
+        marginTop: 2,
+    },
     title: {
         fontWeight: "bold",
-        fontSize: 24,
+        fontSize: 21,
         color: "#000000",
+        flex: 1,
+        flexShrink: 1,
     },
     subHeader: {
-        fontSize: 16,
+        fontSize: 15,
         color: "#666",
         marginTop: 5,
+        flexShrink: 1,
     },
     statusRow: {
         paddingLeft: 35,
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
+        flexWrap: "wrap",
         marginTop: 10,
     },
 });

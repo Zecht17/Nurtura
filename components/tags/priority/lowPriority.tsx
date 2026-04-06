@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 export default function LowPriorityStatus() {
   return (
     <View style={styles.priority}>
-      <Text style={styles.text}>Low Priority</Text>
+      <Text style={styles.text} allowFontScaling={false}>Low Priority</Text>
     </View>
   );
 }
@@ -17,6 +17,7 @@ const styles = StyleSheet.create({
   },
   text: {
     color: "#111827",
-    fontSize: 14,
+    fontSize: 12,
+    flexShrink: 1,
   },
 });

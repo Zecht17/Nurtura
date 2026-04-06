@@ -1,5 +1,6 @@
 import EmergencyAlert from "@/components/buttons/dependentSide/emergencyAlert";
 import CompleteTaskModal from "@/components/modals/CompleteTaskModal";
+import RecurringDayStatusTags, { getRecurringPatternBase } from "@/components/tags/date/recurringDayStatusTags";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
 import MonthlyRecurringStatus from "@/components/tags/recurring/monthly";
@@ -13,12 +14,13 @@ import { useTasks } from "@/context/tasksContext";
 import { useUser } from "@/context/UserContext";
 import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
 import { parseCareSpaceNumericIdFromString } from "@/utils/resolveTaskCareSpaceId";
-import { isDependentRole } from "@/utils/userRole";
+import { getResponsiveTokens, scaleByWidth } from "@/utils/responsive";
 import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
+import { isDependentRole } from "@/utils/userRole";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View, } from "react-native";
+import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View, useWindowDimensions, } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AddTaskShort from "../../components/buttons/addButton";
@@ -66,6 +68,15 @@ function isDueInSelectedRange(due: Date | null, range: TaskRange, now: Date): bo
 }
 
 export default function Index() {
+  const { width } = useWindowDimensions();
+  const tokens = getResponsiveTokens(width);
+  const contentMaxWidth = tokens.containerMaxWidth;
+  const pageInset = tokens.pagePadding;
+  const sectionInset = tokens.pagePadding;
+  const headingSize = tokens.title;
+  const subheadingSize = tokens.subtitle;
+  const controlMinWidth = scaleByWidth(width, 120, 102, 160);
+  const controlMaxWidth = scaleByWidth(width, 200, 170, 260);
   const { user } = useAuth();
   const { profileData } = useUser();
 
@@ -205,24 +216,21 @@ export default function Index() {
     const parsed = formatDateTime();
     const label = parsed
       ? (() => {
-          const datePart = parsed.toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          });
-          const weekday = parsed.toLocaleDateString(undefined, { weekday: "long" });
-          const timePart = parsed.toLocaleTimeString(undefined, {
+          const year = parsed.getFullYear();
+          const month = String(parsed.getMonth() + 1).padStart(2, "0");
+          const day = String(parsed.getDate()).padStart(2, "0");
+          const timePart = parsed.toLocaleTimeString("en-US", {
             hour: "numeric",
             minute: "2-digit",
             hour12: true,
           });
-          return `${datePart} ${weekday} at ${timePart}`;
+          return `${year}-${month}-${day} ${timePart}`;
         })()
-      : [dueDate, dueTime].filter(Boolean).join(" ");
+      : [dueDate, dueTime?.toUpperCase()].filter(Boolean).join(" ");
 
     return (
       <View style={styles.datePill}>
-        <Text style={styles.datePillText}>{label}</Text>
+        <Text style={styles.datePillText} allowFontScaling={false} numberOfLines={1}>{label}</Text>
       </View>
     );
   };
@@ -237,22 +245,23 @@ export default function Index() {
       showsVerticalScrollIndicator={false}
     >
       <SafeAreaView>
-        <View>
+        <View style={[styles.screenConstraint, { maxWidth: contentMaxWidth }] }>
           {/* <View style={styles.view}>
           <Link href="/login">Go to Login </Link>
           <Link href="/signup">Go to Sign Up</Link>
           </View> */}
 
           {/* This is the Greeting Header */}
-          <View style={styles.headerContainer}>
-            <Text style={styles.headerTitle}>Welcome Back, {user?.username ?? "User"}!</Text>
-            <Text style={styles.subHeader}>{overviewSubheader}</Text>
+          <View style={[styles.headerContainer, { padding: pageInset }] }>
+            <Text style={[styles.headerTitle, { fontSize: headingSize }]} allowFontScaling={false}>Welcome Back, {user?.username ?? "User"}!</Text>
+            <Text style={[styles.subHeader, { fontSize: subheadingSize }]} allowFontScaling={false}>{overviewSubheader}</Text>
           </View>
 
           {/* Week summary dashboard — all roles */}
           <View
             style={[
               styles.summaryContainer,
+              { padding: sectionInset },
               isDependentAccount && styles.summaryContainerBeforeEmergency,
             ]}
           >
@@ -261,19 +270,19 @@ export default function Index() {
 
           {/* Dependent: Emergency Alert. Family member / caregiver: Today + Dependents snapshot cards. */}
           {!isDependentAccount ? (
-            <View style={styles.cardsRow}>
+            <View style={[styles.cardsRow, { paddingHorizontal: sectionInset }]}> 
               <TodayTasksCard nowMs={nowMs} tasks={tasksVisibleOnHome} />
               <DependentsCard />
             </View>
           ) : (
-            <View style={styles.dependentEmergencyWrap}>
+            <View style={[styles.dependentEmergencyWrap, { paddingHorizontal: sectionInset }]}> 
               <EmergencyAlert />
             </View>
           )}
 
           {/* This is for the  Task row, dropdown, and add button */}
-          <View style={styles.taskOptions}>
-            <Text style={styles.taskOptionsText}>Tasks</Text>
+          <View style={[styles.taskOptions, { paddingHorizontal: sectionInset }]}> 
+            <Text style={[styles.taskOptionsText, { fontSize: headingSize }]} allowFontScaling={false}>Tasks</Text>
             <View style={styles.tasksHeaderRight}>
               <Menu
                 visible={menuVisible}
@@ -288,7 +297,7 @@ export default function Index() {
                       pointerEvents="none"
                       right={<TextInput.Icon icon="menu-down" />}
                       outlineStyle={{ borderRadius: 16, borderWidth: 0.1 }}
-                      style={styles.inputField}
+                      style={[styles.inputField, { minWidth: controlMinWidth, maxWidth: controlMaxWidth }]}
                       contentStyle={styles.inputFieldContent}
                     />
                   </Pressable>
@@ -296,16 +305,16 @@ export default function Index() {
                 contentStyle={styles.dropdownContent}
                 style={styles.dropdownMenuWrapper}
               >
-                <Menu.Item onPress={() => { setRange("Today"); setMenuVisible(false); }} title="Today" titleStyle={styles.dropdownItemText} />
-                <Menu.Item onPress={() => { setRange("This Week"); setMenuVisible(false); }} title="This Week" titleStyle={styles.dropdownItemText} />
-                <Menu.Item onPress={() => { setRange("This Month"); setMenuVisible(false); }} title="This Month" titleStyle={styles.dropdownItemText} />
+                <Menu.Item onPress={() => { setRange("Today"); setMenuVisible(false); }} title="Today" titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]} />
+                <Menu.Item onPress={() => { setRange("This Week"); setMenuVisible(false); }} title="This Week" titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]} />
+                <Menu.Item onPress={() => { setRange("This Month"); setMenuVisible(false); }} title="This Month" titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]} />
               </Menu>
               {!isDependentAccount && <AddTaskShort />}
             </View>
           </View>
           
           {/* This is the Task Card */}
-          <View style={styles.taskCardContainer}>
+          <View style={[styles.taskCardContainer, { paddingHorizontal: sectionInset }]}> 
             {tasksVisibleOnHome.length === 0 ? (
               <NoPendingTask />
             ) : filteredAndSortedTasks.length === 0 ? (
@@ -338,10 +347,18 @@ export default function Index() {
                     <>
                       {statusTagByStatus[task.computedStatus]}
                       {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
-                      {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
+                      {(() => {
+                        const recurringBase = getRecurringPatternBase(task.recurringPattern);
+                        return recurringBase ? recurringTagByPattern[recurringBase as keyof typeof recurringTagByPattern] : null;
+                      })()}
                     </>
                   }
-                  dateTag={renderDateTag(task.dueDate, task.dueTime)}
+                  dateTag={
+                    <>
+                      <RecurringDayStatusTags recurringPattern={task.recurringPattern} />
+                      {renderDateTag(task.dueDate, task.dueTime)}
+                    </>
+                  }
                   onPress={() =>
                     router.push({
                       pathname: "/taskDetails",
@@ -358,13 +375,13 @@ export default function Index() {
           
           {/* Quick Actions */}
           <Pressable>
-            <View style={styles.taskOptions}>
-              <Text style={styles.taskOptionsText}>Quick Actions</Text>
+            <View style={[styles.taskOptions, { paddingHorizontal: sectionInset }]}> 
+              <Text style={[styles.taskOptionsText, { fontSize: headingSize }]} allowFontScaling={false}>Quick Actions</Text>
             </View>
           </Pressable>
           
           <Pressable>
-            <View style={styles.quickActionRow}>
+            <View style={[styles.quickActionRow, { paddingHorizontal: sectionInset }]}> 
               <CareSpaceButton />
               <AiAssistantButton />
             </View>
@@ -422,6 +439,11 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  screenConstraint: {
+    width: "100%",
+    alignSelf: "center",
   },
 
   headerContainer: {
@@ -552,7 +574,7 @@ export const styles = StyleSheet.create({
 
   datePillText: {
     color: "#000000",
-    fontSize: 14,
+    fontSize: 12,
   },
 
 });

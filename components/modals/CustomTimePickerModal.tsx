@@ -1,6 +1,6 @@
-import React from 'react';
-import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import React from 'react';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface CustomTimePickerModalProps {
     visible: boolean;
@@ -22,6 +22,14 @@ export default function CustomTimePickerModal({
     }, [time, visible]);
 
     const handleTimeChange = (event: any, selectedTime: any) => {
+        if (Platform.OS === 'android') {
+            if (event?.type === 'set' && selectedTime) {
+                onTimeChange(selectedTime);
+            }
+            onClose();
+            return;
+        }
+
         if (selectedTime) {
             setTempTime(selectedTime);
         }
@@ -31,6 +39,19 @@ export default function CustomTimePickerModal({
         onTimeChange(tempTime);
         onClose();
     };
+
+    if (!visible) return null;
+
+    if (Platform.OS === 'android') {
+        return (
+            <DateTimePicker
+                value={time}
+                mode="time"
+                display="default"
+                onChange={handleTimeChange}
+            />
+        );
+    }
 
     return (
         <Modal

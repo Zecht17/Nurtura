@@ -5,15 +5,22 @@ import AddDependentModal from "@/components/modals/addDependentModal";
 import { styles } from "@/components/styles/care-css";
 import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useDependents } from "@/context/DependentContext";
+import { getResponsiveTokens } from "@/utils/responsive";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { StatusBar, Text, View } from "react-native";
+import { StatusBar, Text, View, useWindowDimensions } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 
 export default function CareScreen() {
+    const { width } = useWindowDimensions();
+    const tokens = getResponsiveTokens(width);
+    const contentMaxWidth = tokens.containerMaxWidth;
+    const headerPadding = tokens.pagePadding;
+    const titleSize = tokens.title;
+    const subtitleSize = tokens.subtitle;
     const [isAddCaregiverVisible, setIsAddCaregiverVisible] = useState(false);
     const [isAddDependentVisible, setIsAddDependentVisible] = useState(false);
     const [activeCareSpaceId, setActiveCareSpaceId] = useState<string | null>(null);
@@ -55,13 +62,13 @@ export default function CareScreen() {
 
     return (
         <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={{ flex: 1 }}>
-            <ScrollView style={{ flex: 1 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
             <SafeAreaView style={{ flex: 1 }}>
-                <View style={styles.container}>
-                    <View style={styles.headerContainer}>
+                <View style={[styles.container, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }] }>
+                    <View style={[styles.headerContainer, { padding: headerPadding }] }>
                         <View>
-                            <Text style={styles.headerTitle}>Care Spaces</Text>
-                            <Text style={styles.subHeader}>Collaborate with family and caregivers</Text>
+                            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>Care Spaces</Text>
+                            <Text style={[styles.subHeader, { fontSize: subtitleSize }]}>Collaborate with family and caregivers</Text>
                         </View>
                     </View>
 

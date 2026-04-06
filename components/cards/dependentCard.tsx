@@ -1,10 +1,11 @@
 import SmallAddTaskButton from '@/components/buttons/smallAddTask';
 import ViewTaskButton from '@/components/buttons/viewTaskButton';
+import { getResponsiveTokens } from '@/utils/responsive';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Octicons from '@expo/vector-icons/Octicons';
 import React from 'react';
-import { GestureResponderEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { GestureResponderEvent, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 type DependentCardProps = {
 	fullName: string;
@@ -25,6 +26,9 @@ export default function DependentCard({
 	onEdit,
 	onDelete,
 }: DependentCardProps) {
+	const { width } = useWindowDimensions();
+	const tokens = getResponsiveTokens(width);
+
 	const careNoteLines = React.useMemo(() => {
 		const normalizedLines = careNotes
 			.split(/\r?\n/)
@@ -64,7 +68,7 @@ export default function DependentCard({
 
 				<View style={styles.infoColumn}>
 					<View style={styles.infoRow}>
-						<Text style={styles.infoText}>{fullName}</Text>
+						<Text style={[styles.infoText, { fontSize: tokens.subtitle }]}>{fullName}</Text>
 						<View style={styles.actionsRow}>
 							<Pressable style={styles.actionButton} onPress={handleEditPress}>
 								<MaterialCommunityIcons name="pencil-outline" size={21} color="#000000" />
@@ -75,25 +79,27 @@ export default function DependentCard({
 						</View>
 					</View>
 					<View style={styles.metaRow}>
-						<Text style={styles.infoSubText}>Username: {username || '-'}</Text>
-						<Text style={styles.infoSubText}>Age: {age}</Text>
+						<Text style={[styles.infoSubText, { fontSize: tokens.body }]}>Username: {username || '-'}</Text>
+						<Text style={[styles.infoSubText, { fontSize: tokens.body }]}>Age: {age}</Text>
 					</View>
 				</View>
 			</View>
 
-			<View style={styles.genInfo}>
-				<Text style={styles.geninfoSubText}>Care Notes:</Text>
+			<View style={[styles.genInfo, { paddingLeft: Math.max(48, Math.min(75, width * 0.2)) }]}>
+				<Text style={[styles.geninfoSubText, { fontSize: tokens.body }]}>Care Notes:</Text>
 				<View style={styles.infoGroup}>
 					{careNoteLines.map((line, index) => (
-						<Text key={`care-note-${index}`} style={styles.infoSubText}>• {line}</Text>
+						<Text key={`care-note-${index}`} style={[styles.infoSubText, { fontSize: tokens.body }]}>• {line}</Text>
 					))}
 				</View>
 
-				<View style={styles.buttonRow}>
-					<ViewTaskButton onPress={onOpenProfile} label="View Profile" />
-					<SmallAddTaskButton />
-				</View>
+				
 			</View>
+
+			<View style={styles.buttonRow}>
+					<ViewTaskButton onPress={onOpenProfile} label="View Profile" style={styles.actionPill} />
+					<SmallAddTaskButton style={styles.actionPill} />
+				</View>
 		</Pressable>
 	);
 }
@@ -129,19 +135,20 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		gap: 10,
 		justifyContent: 'space-between',
-		flex: 1,
+		minWidth: 0,
 	},
 	metaRow: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		gap: 8,
+		flexWrap: 'wrap',
 	},
 	actionsRow: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		gap: 8,
 		flexShrink: 0,
-		marginLeft: 'auto',
+		marginLeft: 4,
 	},
 	actionButton: {
 		width: 34,
@@ -156,10 +163,12 @@ const styles = StyleSheet.create({
 	infoText: {
 		fontSize: 18,
 		fontWeight: 'bold',
+		flexShrink: 1,
 	},
 	infoSubText: {
 		fontSize: 14,
 		color: '#666',
+		flexShrink: 1,
 	},
 	geninfoSubText: {
 		fontSize: 14,
@@ -168,7 +177,8 @@ const styles = StyleSheet.create({
 	},
 	genInfo: {
 		marginTop: 10,
-		marginLeft: 75,
+		marginLeft: 0,
+		paddingLeft: 75,
 		paddingBottom: 10,
 		borderTopWidth: 1,
 		borderTopColor: '#b3b3b3be',
@@ -178,8 +188,16 @@ const styles = StyleSheet.create({
 	},
 	buttonRow: {
 		flexDirection: 'row',
-		justifyContent: 'flex-start',
+		justifyContent: 'space-evenly',
+		alignItems: 'center',
+		alignSelf: 'stretch',
+		width: '100%',
 		marginTop: 10,
-		gap: 10,
+		gap: 0,
+		flexWrap: 'nowrap',
+	},
+	actionPill: {
+		flexGrow: 0,
+		flexShrink: 1,
 	},
 });

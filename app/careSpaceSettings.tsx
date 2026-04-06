@@ -8,6 +8,7 @@ import DeleteCareSpaceModal from "@/components/modals/deleteCareSpaceModal";
 import DeleteTaskModal from "@/components/modals/DeleteTaskModal";
 import GenerateCsCodeModal from "@/components/modals/generateCsCode";
 import ManageAccessModal from "@/components/modals/manageAccessModal";
+import RecurringDayStatusTags, { getRecurringPatternBase } from "@/components/tags/date/recurringDayStatusTags";
 import HighPriorityStatus from "@/components/tags/priority/highPriority";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
 import MediumPriorityStatus from "@/components/tags/priority/mediumPriority";
@@ -32,6 +33,8 @@ import {
     parsePeopleWithRole,
 } from "@/utils/careSpaceSettings.utils";
 import { resolveDependentDisplayName, selfDependentContextFromProfile } from "@/utils/resolveDependentDisplayName";
+import { resolveTaskCareSpaceId } from "@/utils/resolveTaskCareSpaceId";
+import { clamp, scaleByWidth } from "@/utils/responsive";
 import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
 import { Feather } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
@@ -41,12 +44,17 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CareSpaceSettings() {
     StatusBar.setBarStyle("dark-content");
+    const { width } = useWindowDimensions();
+    const contentMaxWidth = clamp(width - 16, 320, 760);
+    const pagePadding = scaleByWidth(width, 15, 10, 24);
+    const titleSize = scaleByWidth(width, 24, 21, 26);
+    const subtitleSize = scaleByWidth(width, 16, 14, 16);
     const params = useLocalSearchParams<{
         id?: string;
         title?: string;
@@ -130,7 +138,14 @@ export default function CareSpaceSettings() {
     /** Care space model `tasks` is not filled from API; use TasksContext like Home. */
     const tasksInThisCareSpace = useMemo((): Task[] => {
         if (numericCareSpaceIdResolved == null) return [];
-        return tasksFromContext.filter((t) => t.careSpaceId === numericCareSpaceIdResolved);
+        return tasksFromContext.filter((task) => {
+            const resolvedTaskCareSpaceId = resolveTaskCareSpaceId(task, {
+                routeCareSpaceId: numericCareSpaceIdResolved,
+                filterCareSpaceId: numericCareSpaceIdResolved,
+            });
+
+            return resolvedTaskCareSpaceId === numericCareSpaceIdResolved;
+        });
     }, [tasksFromContext, numericCareSpaceIdResolved]);
 
     useEffect(() => {
@@ -353,24 +368,24 @@ export default function CareSpaceSettings() {
                     showsVerticalScrollIndicator
                 >
             <SafeAreaView edges={["top", "left", "right"]}>
-                <View style={styles.container}>
+                <View style={[styles.container, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%", padding: pagePadding }]}>
                     <View style={styles.headerContainer}>
                         <Pressable onPress={() => router.back()}>
                             <Feather name="arrow-left" size={24} color="black" />
                         </Pressable>
                         <View>
                             {/* This is for the name of the Care Person */}
-                            <Text style={styles.headerTitle}>{spaceName}</Text>
-                            <Text style={styles.subHeader}>Care Space Settings</Text>
+                            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>{spaceName}</Text>
+                            <Text style={[styles.subHeader, { fontSize: subtitleSize }]}>Care Space Settings</Text>
                         </View>
                     </View>
 
                     {/* This is the container for the Care Space Information */}
                     <View style={styles.careInfoContainer}>
-                        <View style={styles.careInfoRow}>
+                        <View style={[styles.careInfoRow, styles.careInfoHeaderRow]}>
                         <Text style={styles.careInfoTitle}>Care Space Information</Text>
                             {isEditingInfo && canEditCareSpaceInfo ? (
-                                <View style={styles.actionRow}>
+                                <View style={[styles.actionRow, styles.actionRowNoWrap]}>
                                     <Pressable style={[styles.editButton, styles.saveButton]} onPress={handleInfoSave}>
                                         <Text style={styles.saveButtonText}>Save</Text>
                                     </Pressable>
@@ -379,13 +394,13 @@ export default function CareSpaceSettings() {
                                     </Pressable>
                                 </View>
                             ) : canEditCareSpaceInfo ? (
-                                <View style={styles.actionRow}>
+                                <View style={[styles.actionRow, styles.actionRowNoWrap]}>
                                     <Pressable style={styles.editButton} onPress={handleInfoEdit}>
-                                        <Feather name="edit" size={16} color="black" />
+                                        <Feather name="edit" size={14} color="black" />
                                         <Text style={styles.editButtonText}>Edit</Text>
                                     </Pressable>
                                     <Pressable style={styles.editButton} onPress={() => setShowGenerateCodeModal(true)}>
-                                        <FontAwesome6 name="add" size={14} color="black" />
+                                        <FontAwesome6 name="add" size={12} color="black" />
                                         <Text style={styles.editButtonText}>Invite</Text>
                                     </Pressable>
                                 </View>
@@ -509,50 +524,65 @@ export default function CareSpaceSettings() {
                             </View>
                         ) : (
                             <View style={styles.taskContainer}>
-                                {decoratedTasks.map((task) => (
-                                    <EditableTaskCard
-                                        key={task.id}
-                                        value={task.id}
-                                        selectedTask={selectedTask}
-                                        onSelect={setSelectedTask}
-                                        title={task.title}
-                                        dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution)}
-                                        description={task.description}
-                                        statusTags={
-                                            <>
-                                                {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
-                                                {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
-                                                {task.recurringPattern && recurringTagByPattern[task.recurringPattern as keyof typeof recurringTagByPattern]}
-                                            </>
-                                        }
-                                        dateTag={renderDateTag(task.dueDate, task.dueTime)}
-                                        onEdit={() =>
-                                            router.push({
-                                                pathname: "/editTaskPage",
-                                                params: {
-                                                    id: task.id,
-                                                    careSpaceId:
-                                                        numericCareSpaceIdResolved != null
-                                                            ? String(numericCareSpaceIdResolved)
-                                                            : undefined,
-                                                },
-                                            })
-                                        }
-                                        onPress={() =>
-                                            router.push({
-                                                pathname: "/taskDetails",
-                                                params: {
-                                                    id: task.id,
-                                                    careSpaceId:
-                                                        numericCareSpaceIdResolved != null
-                                                            ? String(numericCareSpaceIdResolved)
-                                                            : undefined,
-                                                },
-                                            })
-                                        }
-                                        onDelete={() => setPendingDeleteId(task.id)}
-                                    />
-                                ))}
+                                <ScrollView
+                                    style={styles.taskListScroll}
+                                    contentContainerStyle={styles.taskListContent}
+                                    showsVerticalScrollIndicator
+                                    nestedScrollEnabled
+                                >
+                                    {decoratedTasks.map((task) => (
+                                        <EditableTaskCard
+                                            key={task.id}
+                                            value={task.id}
+                                            selectedTask={selectedTask}
+                                            onSelect={setSelectedTask}
+                                            title={task.title}
+                                            dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution)}
+                                            description={task.description}
+                                            statusTags={
+                                                <>
+                                                    {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
+                                                    {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
+                                                    {(() => {
+                                                        const recurringBase = getRecurringPatternBase(task.recurringPattern);
+                                                        return recurringBase ? recurringTagByPattern[recurringBase as keyof typeof recurringTagByPattern] : null;
+                                                    })()}
+                                                </>
+                                            }
+                                            dateTag={
+                                                <>
+                                                    <RecurringDayStatusTags recurringPattern={task.recurringPattern} />
+                                                    {renderDateTag(task.dueDate, task.dueTime)}
+                                                </>
+                                            }
+                                            onEdit={() =>
+                                                router.push({
+                                                    pathname: "/editTaskPage",
+                                                    params: {
+                                                        id: task.id,
+                                                        careSpaceId:
+                                                            numericCareSpaceIdResolved != null
+                                                                ? String(numericCareSpaceIdResolved)
+                                                                : undefined,
+                                                    },
+                                                })
+                                            }
+                                            onPress={() =>
+                                                router.push({
+                                                    pathname: "/taskDetails",
+                                                    params: {
+                                                        id: task.id,
+                                                        careSpaceId:
+                                                            numericCareSpaceIdResolved != null
+                                                                ? String(numericCareSpaceIdResolved)
+                                                                : undefined,
+                                                    },
+                                                })
+                                            }
+                                            onDelete={() => setPendingDeleteId(task.id)}
+                                        />
+                                    ))}
+                                </ScrollView>
                             </View>
                         )}
 
@@ -846,11 +876,13 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         alignItems: "center",
         width: "100%",
+        flexWrap: "wrap",
+        gap: 8,
     },
 
     careInfoTitle: {
         fontSize: 18,
-        // fontWeight: "bold",
+        flexShrink: 1,
     },
 
     editButton: {
@@ -863,6 +895,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
+        flexShrink: 1,
     },
 
     editButtonText: {
@@ -874,6 +907,18 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
+        flexWrap: "wrap",
+        justifyContent: "flex-end",
+        marginLeft: "auto",
+    },
+
+    careInfoHeaderRow: {
+        flexWrap: "nowrap",
+        alignItems: "center",
+    },
+
+    actionRowNoWrap: {
+        flexWrap: "nowrap",
     },
 
     saveButton: {
@@ -891,6 +936,8 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
+        flexShrink: 1,
+        minWidth: 0,
     },
 
     caregiverInfoRow: {
@@ -899,6 +946,7 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         width: "100%",
         gap: 8,
+        flexWrap: "wrap",
     },
 
     caregiverItem: {
@@ -1048,6 +1096,15 @@ const styles = StyleSheet.create({
         borderColor: "#e0e0e0",
         borderRadius: 14,
         marginTop: 20,
+        paddingBottom: 8,
+        gap: 12,
+    },
+
+    taskListScroll: {
+        maxHeight: 170,
+    },
+
+    taskListContent: {
         paddingBottom: 8,
         gap: 12,
     },

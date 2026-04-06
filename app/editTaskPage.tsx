@@ -5,6 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Checkbox, Menu, Switch, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
+import FriButton from "../components/buttons/recurringDate/friButton";
+import MonButton from "../components/buttons/recurringDate/monButton";
+import SatButton from "../components/buttons/recurringDate/satButton";
+import SunButton from "../components/buttons/recurringDate/sunButton";
+import ThuButton from "../components/buttons/recurringDate/thursButton";
+import TueButton from "../components/buttons/recurringDate/tuesButton";
+import WedButton from "../components/buttons/recurringDate/wedButton";
 import CustomDatePickerModal from "../components/modals/CustomDatePickerModal";
 import CustomTimePickerModal from "../components/modals/CustomTimePickerModal";
 import { useCareSpaces } from "../context/CareSpacesContext";
@@ -48,6 +55,7 @@ export default function EditTaskScreen() {
     const [applyToAll, setApplyToAll] = useState(false);
     const [isRecurring, setIsRecurring] = useState(false);
     const [isReminderEnabled, setIsReminderEnabled] = useState(false);
+    const [selectedRecurringDays, setSelectedRecurringDays] = useState<number[]>([]);
 
     const formatDateYMD = (date: Date) => {
         const year = date.getFullYear();
@@ -103,7 +111,9 @@ export default function EditTaskScreen() {
         setTitle(task.title || "");
         setDescription(task.description || "");
         setPriority(task.priority || "Select Priority");
-        setRecurringPattern(task.recurringPattern || "Select Recurring Pattern");
+        const parsedRecurring = parseRecurringPattern(task.recurringPattern);
+        setRecurringPattern(parsedRecurring.basePattern);
+        setSelectedRecurringDays(parsedRecurring.days);
         setIsRecurring(Boolean(task.recurringPattern && task.recurringPattern !== "Select Recurring Pattern"));
         setIsReminderEnabled(Boolean(task.reminderEnabled));
 
@@ -266,6 +276,56 @@ export default function EditTaskScreen() {
         return merged.toISOString();
     };
 
+    const requiresSpecificDays = isRecurring && (recurringPattern === "Weekly" || recurringPattern === "Custom (Specific Days)");
+
+    const dayTokenToIndex: Record<string, number> = {
+        SUN: 0,
+        MON: 1,
+        TUE: 2,
+        TUES: 2,
+        WED: 3,
+        THU: 4,
+        THUR: 4,
+        THURS: 4,
+        FRI: 5,
+        SAT: 6,
+    };
+
+    const parseRecurringPattern = (rawPattern?: string | null) => {
+        if (!rawPattern) {
+            return { basePattern: "Select Recurring Pattern", days: [] as number[] };
+        }
+
+        const [rawBase, rawDays] = rawPattern.split(":");
+        const basePattern = rawBase?.trim() || "Select Recurring Pattern";
+
+        if (!rawDays) {
+            return { basePattern, days: [] as number[] };
+        }
+
+        const days = rawDays
+            .split(",")
+            .map((token) => dayTokenToIndex[token.trim().toUpperCase()])
+            .filter((day): day is number => typeof day === "number");
+
+        return { basePattern, days: [...new Set(days)].sort((a, b) => a - b) };
+    };
+
+    const toggleRecurringDay = (day: number) => {
+        setSelectedRecurringDays((prev) => {
+            if (prev.includes(day)) {
+                return prev.filter((existingDay) => existingDay !== day);
+            }
+
+            return [...prev, day].sort((a, b) => a - b);
+        });
+    };
+
+    const formatRecurringDaysLabel = (days: number[]) => {
+        const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        return days.map((day) => labels[day]).join(", ");
+    };
+
     // Same as add task: allow saving when due date/time is already in the past (editing overdue items).
     const isFormValid = Boolean(
         title.trim() &&
@@ -274,7 +334,8 @@ export default function EditTaskScreen() {
             ? selectableDependents.length > 0
             : typeof selectedDependentUserId === "number" && selectedDependentUserId > 0) &&
         priority !== "Select Priority" &&
-        dateInputValue.trim(),
+        dateInputValue.trim() &&
+        (!requiresSpecificDays || selectedRecurringDays.length > 0),
     );
 
     const handleUpdateTask = () => {
@@ -301,15 +362,54 @@ export default function EditTaskScreen() {
             return;
         }
 
-        const recurringValue = isRecurring && recurringPattern !== "Select Recurring Pattern"
-            ? recurringPattern
-            : null;
-
-        const recurrenceType = recurringValue ? recurringValue.toLowerCase() : "none";
-        const recurrenceDays =
-            recurrenceType === "daily" ? 1 : recurrenceType === "weekly" ? 7 : recurrenceType === "monthly" ? 30 : 0;
+        const recurringValue =
+            isRecurring && (recurringPattern === "Daily" || recurringPattern === "Weekly" || recurringPattern === "Custom (Specific Days)")
+                ? recurringPattern
+                : null;
 
         const dueDateIso = toIsoFromDateTime(dueDate, dueTime);
+
+        const buildIsoForWeekday = (targetWeekday: number) => {
+            const dayDate = new Date(dueDate);
+            const currentWeekday = dayDate.getDay();
+            const dayOffset = (targetWeekday - currentWeekday + 7) % 7;
+
+            dayDate.setDate(dayDate.getDate() + dayOffset);
+            dayDate.setHours(dueTime.getHours(), dueTime.getMinutes(), 0, 0);
+
+            return dayDate.toISOString();
+        };
+
+        const weeklyScheduleData = selectedRecurringDays.map((day) => {
+            const dayIso = buildIsoForWeekday(day);
+
+            return {
+                start_time: dayIso,
+                end_time: dayIso,
+                recurrence_type: "custom" as const,
+                recurrence_days: day,
+            };
+        });
+
+        const scheduleData = !recurringValue
+            ? [
+                {
+                    start_time: dueDateIso,
+                    end_time: dueDateIso,
+                    recurrence_type: "none" as const,
+                    recurrence_days: 0,
+                },
+            ]
+            : recurringValue === "Daily"
+                ? [
+                    {
+                        start_time: dueDateIso,
+                        end_time: dueDateIso,
+                        recurrence_type: "daily" as const,
+                        recurrence_days: 1,
+                    },
+                ]
+                : weeklyScheduleData;
 
         const assignedUserIds = applyToAll
             ? selectableDependents
@@ -335,20 +435,16 @@ export default function EditTaskScreen() {
                 priority: normalizedPriority,
             },
             assigned_user_ids: assignedUserIds,
-            schedule_data: [
-                {
-                    start_time: dueDateIso,
-                    end_time: dueDateIso,
-                    recurrence_type: recurrenceType as "none" | "daily" | "weekly" | "monthly",
-                    recurrence_days: recurrenceDays,
-                },
-            ],
+            schedule_data: scheduleData as any,
             localTaskOverrides: {
                 title: title.trim(),
                 dependent: applyToAll ? "All Dependents" : dependentType,
                 description: description.trim(),
                 priority,
-                recurringPattern: recurringValue,
+                recurringPattern:
+                    recurringValue && selectedRecurringDays.length > 0
+                        ? `${recurringValue}: ${formatRecurringDaysLabel(selectedRecurringDays)}`
+                        : recurringValue,
                 reminderEnabled: isReminderEnabled,
                 dueDate: formatDateYMD(dueDate),
                 dueTime: dueTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
@@ -629,7 +725,14 @@ export default function EditTaskScreen() {
                                         </View>
                                         <Switch
                                             value={isRecurring}
-                                            onValueChange={setIsRecurring}
+                                            onValueChange={(nextValue) => {
+                                                setIsRecurring(nextValue);
+
+                                                if (!nextValue) {
+                                                    setRecurringPattern("Select Recurring Pattern");
+                                                    setSelectedRecurringDays([]);
+                                                }
+                                            }}
                                             color="#7C6FDC"
                                             style={styles.toggle}
                                         />
@@ -654,10 +757,80 @@ export default function EditTaskScreen() {
                                         contentStyle={styles.dropdownContent}
                                         style={styles.dropdown}
                                     >
-                                        <Menu.Item onPress={() => { setRecurringPattern("Daily"); setRecurringPatternMenuVisible(false); }} title="Daily" titleStyle={styles.dropdownItemText} />
-                                        <Menu.Item onPress={() => { setRecurringPattern("Weekly"); setRecurringPatternMenuVisible(false); }} title="Weekly" titleStyle={styles.dropdownItemText} />
-                                        <Menu.Item onPress={() => { setRecurringPattern("Monthly"); setRecurringPatternMenuVisible(false); }} title="Monthly" titleStyle={styles.dropdownItemText} />
+                                        <Menu.Item
+                                            onPress={() => {
+                                                setRecurringPattern("Daily");
+                                                setSelectedRecurringDays([]);
+                                                setRecurringPatternMenuVisible(false);
+                                            }}
+                                            title="Daily"
+                                            titleStyle={styles.dropdownItemText}
+                                        />
+                                        <Menu.Item
+                                            onPress={() => {
+                                                setRecurringPattern("Weekly");
+                                                setRecurringPatternMenuVisible(false);
+                                            }}
+                                            title="Weekly"
+                                            titleStyle={styles.dropdownItemText}
+                                        />
+                                        <Menu.Item
+                                            onPress={() => {
+                                                setRecurringPattern("Custom (Specific Days)");
+                                                setRecurringPatternMenuVisible(false);
+                                            }}
+                                            title="Custom (Specific Days)"
+                                            titleStyle={styles.dropdownItemText}
+                                        />
                                     </Menu>
+
+                                    {requiresSpecificDays && (
+                                        <View style={styles.daysSelectionContainer}>
+                                            <Text style={styles.inputTitle}>Select Days</Text>
+                                            <View style={styles.daysRow}>
+                                                <SunButton
+                                                    selected={selectedRecurringDays.includes(0)}
+                                                    onPress={() => toggleRecurringDay(0)}
+                                                    style={styles.dayButtonSpacing}
+                                                />
+                                                <MonButton
+                                                    selected={selectedRecurringDays.includes(1)}
+                                                    onPress={() => toggleRecurringDay(1)}
+                                                    style={styles.dayButtonSpacing}
+                                                />
+                                                <TueButton
+                                                    selected={selectedRecurringDays.includes(2)}
+                                                    onPress={() => toggleRecurringDay(2)}
+                                                    style={styles.dayButtonSpacing}
+                                                />
+                                                <WedButton
+                                                    selected={selectedRecurringDays.includes(3)}
+                                                    onPress={() => toggleRecurringDay(3)}
+                                                    style={styles.dayButtonSpacing}
+                                                />
+                                                <ThuButton
+                                                    selected={selectedRecurringDays.includes(4)}
+                                                    onPress={() => toggleRecurringDay(4)}
+                                                    style={styles.dayButtonSpacing}
+                                                />
+                                                <FriButton
+                                                    selected={selectedRecurringDays.includes(5)}
+                                                    onPress={() => toggleRecurringDay(5)}
+                                                    style={styles.dayButtonSpacing}
+                                                />
+                                                <SatButton
+                                                    selected={selectedRecurringDays.includes(6)}
+                                                    onPress={() => toggleRecurringDay(6)}
+                                                    style={styles.dayButtonSpacing}
+                                                />
+                                            </View>
+                                            {selectedRecurringDays.length > 0 && (
+                                                <Text style={styles.daysPreviewText}>
+                                                    Task will repeat on: {formatRecurringDaysLabel(selectedRecurringDays)}
+                                                </Text>
+                                            )}
+                                        </View>
+                                    )}
                                 </View>
 
                                 <View style={styles.recurringTaskRow}>
@@ -878,6 +1051,26 @@ export const styles = StyleSheet.create({
         height: 25,
         alignContent: "center",
         alignSelf: "center",
+    },
+
+    daysSelectionContainer: {
+        marginTop: 8,
+    },
+
+    daysRow: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        rowGap: 8,
+    },
+
+    dayButtonSpacing: {
+        marginRight: 8,
+    },
+
+    daysPreviewText: {
+        marginTop: 10,
+        color: "#6d6d6d",
+        fontSize: 14,
     },
 
     datePickerContainer: {

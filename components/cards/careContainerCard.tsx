@@ -54,8 +54,8 @@ export default function CareContainerCard({
                 {familyMembers.map((member, index) => (
                     <View key={`family-${member.memberId ?? `i-${index}`}`} style={styles.caregiverNameRow}>
                         <View style={styles.caregiverItem}><Text style={styles.careGiverIcon}>{member.initial}</Text></View>
-                        <View style={{ flexDirection: "column", alignItems: "flex-start", justifyContent: "flex-start" }}>
-                            <View style={styles.caregiverNameRow}>
+                        <View style={styles.memberTextGroup}>
+                            <View style={styles.memberNameRowInline}>
                                 <Text style={styles.caregiverName}>{member.name}</Text>
                                 <Text style={styles.caregiverName}>({member.role})</Text>
                             </View>
@@ -73,8 +73,8 @@ export default function CareContainerCard({
                 {caregivers.map((caregiver, index) => (
                     <View key={`caregiver-${caregiver.memberId ?? `i-${index}`}`} style={styles.caregiverNameRow}>
                         <View style={styles.caregiverItem}><Text style={styles.careGiverIcon}>{caregiver.initial}</Text></View>
-                        <View style={{ flexDirection: "column", alignItems: "flex-start", justifyContent: "flex-start" }}>
-                            <View style={styles.caregiverNameRow}>
+                        <View style={styles.memberTextGroup}>
+                            <View style={styles.memberNameRowInline}>
                                 <Text style={styles.caregiverName}>{caregiver.name}</Text>
                                 <Text style={styles.caregiverName}>({caregiver.role})</Text>
                             </View>

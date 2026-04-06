@@ -83,10 +83,11 @@ export const styles = StyleSheet.create({
 
     caregiverRow: {
         flexDirection: "row",
-        // gap: 10,
         marginTop: 15,
         justifyContent: "space-between",
         alignItems: "center",
+        gap: 8,
+        flexWrap: "wrap",
     },
 
     familySubTitle: {
@@ -116,6 +117,7 @@ export const styles = StyleSheet.create({
         borderRadius: 16,
         borderColor: "#666",
         borderWidth: 1,
+        flexShrink: 1,
     },
 
     addCaregiverText: {
@@ -156,6 +158,7 @@ export const styles = StyleSheet.create({
     caregiverName: {
         fontSize: 16,
         color: "#333",
+        flexShrink: 1,
     },
 
     caregiverNameRow: {
@@ -164,6 +167,22 @@ export const styles = StyleSheet.create({
         justifyContent: "flex-start",
         alignItems: "center",
         alignContent: "center",
+    },
+
+    memberTextGroup: {
+        flexDirection: "column",
+        alignItems: "flex-start",
+        justifyContent: "flex-start",
+        flex: 1,
+        minWidth: 0,
+    },
+
+    memberNameRowInline: {
+        flexDirection: "row",
+        gap: 6,
+        alignItems: "center",
+        flexWrap: "wrap",
+        minWidth: 0,
     },
 
     backupText: {
@@ -192,6 +211,7 @@ export const styles = StyleSheet.create({
     memberName: {
         fontSize: 16,
         color: "#333",
+        flexShrink: 1,
     },
 
     memberNameRow: {
