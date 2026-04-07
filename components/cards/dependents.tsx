@@ -1,14 +1,35 @@
+import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useDependents } from "@/context/DependentContext";
 import Octicons from "@expo/vector-icons/Octicons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useMemo } from "react";
 import { ActivityIndicator, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 export default function DependentsCard() {
   const { dependents, loadingDependents, dependentsError } = useDependents();
+  const { careSpaces, loadingCareSpaces } = useCareSpaces();
   const { width } = useWindowDimensions();
   const compact = width < 380;
 
-  const count = dependents.length;
+  const careSpaceDependentCount = useMemo(() => {
+    const unique = new Set<string>();
+
+    careSpaces.forEach((careSpace) => {
+      (careSpace.dependents || []).forEach((dependent) => {
+        const key = typeof dependent.userId === "number"
+          ? `id-${dependent.userId}`
+          : `name-${dependent.name.trim().toLowerCase()}`;
+
+        unique.add(key);
+      });
+    });
+
+    return unique.size;
+  }, [careSpaces]);
+
+  const count = careSpaceDependentCount > 0 ? careSpaceDependentCount : dependents.length;
+  const loading = loadingCareSpaces && careSpaceDependentCount === 0 && loadingDependents;
+  const showDependentsError = !!dependentsError && careSpaceDependentCount === 0;
 
   return (
     <LinearGradient
@@ -18,10 +39,10 @@ export default function DependentsCard() {
       style={[styles.card, compact && styles.cardCompact]}
     >
       <Text style={styles.title} allowFontScaling={false}>Dependents</Text>
-      {dependentsError ? <Text style={styles.errorText} allowFontScaling={false}>{dependentsError}</Text> : null}
+      {showDependentsError ? <Text style={styles.errorText} allowFontScaling={false}>{dependentsError}</Text> : null}
       <View style={styles.row}>
-        <Text style={[styles.count, compact && styles.countCompact]} allowFontScaling={false}>{loadingDependents ? "—" : String(count)}</Text>
-        {loadingDependents ? (
+        <Text style={[styles.count, compact && styles.countCompact]} allowFontScaling={false}>{loading ? "—" : String(count)}</Text>
+        {loading ? (
           <ActivityIndicator size="small" color="#ffffff" />
         ) : (
           <Octicons name="person" size={compact ? 28 : 30} color="white" />

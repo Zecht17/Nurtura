@@ -7,6 +7,7 @@ export type RoleLabel = "Owner" | "Editor" | "Viewer";
 
 export type PersonWithRole = {
     memberId?: number;
+    userId?: number;
     initial: string;
     name: string;
     role: RoleLabel;
@@ -14,6 +15,7 @@ export type PersonWithRole = {
 };
 
 export type DependentPerson = {
+    userId?: number;
     initial: string;
     name: string;
 };
@@ -195,6 +197,7 @@ export function CareSpacesProvider({ children }: { children: ReactNode }) {
 
                 return {
                     memberId: member.member_id,
+                    userId: getMemberUserId(member),
                     initial: getInitialFromName(displayName),
                     name: displayName,
                     role: toRoleLabel(member.role_in_space),
@@ -212,23 +215,35 @@ export function CareSpacesProvider({ children }: { children: ReactNode }) {
                 .filter((item): item is [number, string] => !!item),
         );
 
-        const dependentNames = Array.from(
-            new Set(
-                dependentMembers
-                    .map((member) => {
-                        const memberUserId = getMemberUserId(member);
-                        const localName = typeof memberUserId === "number" ? localDependentsByUserId.get(memberUserId) : undefined;
-                        const fallbackName = buildDisplayName(member.user);
-                        return (localName || fallbackName).trim();
-                    })
-                    .filter((name) => name.length > 0),
-            ),
-        );
+        const dependentEntries = dependentMembers
+            .map((member) => {
+                const memberUserId = getMemberUserId(member);
+                const localName = typeof memberUserId === "number" ? localDependentsByUserId.get(memberUserId) : undefined;
+                const fallbackName = buildDisplayName(member.user);
+                const name = (localName || fallbackName).trim();
 
-        const careSpaceDependents: DependentPerson[] = dependentNames.map((name) => ({
-            initial: getInitialFromName(name),
-            name,
-        }));
+                return {
+                    userId: typeof memberUserId === "number" ? memberUserId : undefined,
+                    name,
+                };
+            })
+            .filter((entry) => entry.name.length > 0);
+
+        const dependentMap = new Map<string, DependentPerson>();
+        dependentEntries.forEach((entry) => {
+            const key = typeof entry.userId === "number" ? `id-${entry.userId}` : `name-${entry.name.toLowerCase()}`;
+            if (dependentMap.has(key)) {
+                return;
+            }
+
+            dependentMap.set(key, {
+                userId: entry.userId,
+                initial: getInitialFromName(entry.name),
+                name: entry.name,
+            });
+        });
+
+        const careSpaceDependents: DependentPerson[] = Array.from(dependentMap.values());
 
         return {
             id: `care-space-${item.care_space_id ?? Date.now()}`,
@@ -238,6 +253,7 @@ export function CareSpacesProvider({ children }: { children: ReactNode }) {
             familyMembers: [
                 {
                     memberId: ownerMember?.member_id,
+                    userId: ownerMember ? getMemberUserId(ownerMember) : creatorUserId,
                     initial: getInitialFromName(ownerName),
                     name: ownerName,
                     role: "Owner",
@@ -355,6 +371,7 @@ export function CareSpacesProvider({ children }: { children: ReactNode }) {
                 return typeof dependentUserId === "number" && requestBody.dependent_user_ids.includes(dependentUserId);
             })
             .map((dependent) => ({
+                userId: dependent.userId ?? dependent.dependentId,
                 initial: getInitialFromName(dependent.name),
                 name: dependent.name,
             }));
@@ -390,6 +407,13 @@ export function CareSpacesProvider({ children }: { children: ReactNode }) {
             familyMembers: [
                 {
                     memberId: typeof ownerFromMembers?.member_id === "number" ? ownerFromMembers.member_id : undefined,
+                    userId: typeof ownerFromMembers?.user?.user_id === "number"
+                        ? ownerFromMembers.user.user_id
+                        : typeof ownerFromMembers?.user_id === "number"
+                            ? ownerFromMembers.user_id
+                            : typeof data?.creator?.user_id === "number"
+                                ? data.creator.user_id
+                                : undefined,
                     initial: getInitialFromName(ownerName),
                     name: ownerName,
                     role: "Owner",

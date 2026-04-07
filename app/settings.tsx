@@ -47,8 +47,8 @@ export default function SettingsPage() {
 
     const handleLogout = async () => {
         try {
-            await logout();  // now this will work
-            router.push("/login");
+            await logout();
+            router.replace('/login');
         } catch (err) {
             console.log("Logout failed:", err);
         }

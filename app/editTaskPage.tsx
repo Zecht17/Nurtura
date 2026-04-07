@@ -14,6 +14,7 @@ import TueButton from "../components/buttons/recurringDate/tuesButton";
 import WedButton from "../components/buttons/recurringDate/wedButton";
 import CustomDatePickerModal from "../components/modals/CustomDatePickerModal";
 import CustomTimePickerModal from "../components/modals/CustomTimePickerModal";
+import ReminderModal from "../components/modals/reminderModal";
 import { useCareSpaces } from "../context/CareSpacesContext";
 import { useDependents } from "../context/DependentContext";
 import { Task, useTasks } from "../context/tasksContext";
@@ -34,10 +35,61 @@ export default function EditTaskScreen() {
         return match ? Number.parseInt(match[1], 10) : Number.parseInt(careSpaceIdStr.replace("care-space-", ""), 10);
     };
 
+    const canManageTasksInCareSpace = (role?: string) => role === "Owner" || role === "Editor";
+
     const selectableDependents = dependents.filter((dependent) => {
-        const resolvedUserId = dependent.userId ?? dependent.dependentId;
+        const resolvedUserId = dependent.userId;
         return typeof resolvedUserId === "number" && resolvedUserId > 0;
     });
+
+    const manageableCareSpaces = useMemo(
+        () => careSpaces.filter((careSpace) => canManageTasksInCareSpace(careSpace.currentUserRole)),
+        [careSpaces],
+    );
+
+    const careSpaceDependentsById = useMemo(() => {
+        const map = new Map<number, Array<{ userId: number; name: string; key: string }>>();
+
+        careSpaces.forEach((careSpace) => {
+            const numericCareSpaceId = resolveCareSpaceNumericId(careSpace.id);
+            if (!Number.isInteger(numericCareSpaceId) || numericCareSpaceId <= 0) {
+                return;
+            }
+
+            const scoped = (careSpace.dependents || [])
+                .map((dependent) => {
+                    if (typeof dependent.userId === "number" && dependent.userId > 0) {
+                        return {
+                            userId: dependent.userId,
+                            name: dependent.name,
+                            key: `cs-${numericCareSpaceId}-dep-${dependent.userId}`,
+                        };
+                    }
+
+                    const localMatch = selectableDependents.find(
+                        (item) => item.name.trim().toLowerCase() === dependent.name.trim().toLowerCase(),
+                    );
+
+                    if (!localMatch) {
+                        return null;
+                    }
+
+                    return {
+                        userId: localMatch.userId as number,
+                        name: localMatch.name,
+                        key: `cs-${numericCareSpaceId}-dep-${localMatch.userId}`,
+                    };
+                })
+                .filter((item): item is { userId: number; name: string; key: string } => !!item && item.name.trim().length > 0);
+
+            if (scoped.length > 0) {
+                const unique = Array.from(new Map(scoped.map((item) => [item.userId, item])).values());
+                map.set(numericCareSpaceId, unique);
+            }
+        });
+
+        return map;
+    }, [careSpaces, selectableDependents]);
 
     const [menuVisible1, setMenuVisible1] = useState(false);
     const [menuVisible2, setMenuVisible2] = useState(false);
@@ -70,7 +122,28 @@ export default function EditTaskScreen() {
     const [dueTime, setDueTime] = useState(new Date());
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [timeInputValue, setTimeInputValue] = useState(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }));
+    const [reminderTime, setReminderTime] = useState(new Date());
+    const [showReminderTimePicker, setShowReminderTimePicker] = useState(false);
+    const [reminderTimeInputValue, setReminderTimeInputValue] = useState(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }));
     const [savingTask, setSavingTask] = useState(false);
+
+    const availableDependents = useMemo(() => {
+        if (typeof selectedCareSpaceId === "number" && selectedCareSpaceId > 0) {
+            return careSpaceDependentsById.get(selectedCareSpaceId) || [];
+        }
+
+        return selectableDependents
+            .map((dependent) => {
+                const resolvedUserId = dependent.userId;
+                if (typeof resolvedUserId !== "number" || resolvedUserId <= 0) return null;
+                return {
+                    userId: resolvedUserId,
+                    name: dependent.name,
+                    key: `dep-${dependent.id}-${resolvedUserId}`,
+                };
+            })
+            .filter((item): item is { userId: number; name: string; key: string } => !!item);
+    }, [selectedCareSpaceId, careSpaceDependentsById, selectableDependents]);
 
     const userEditedCareSpaceRef = useRef(false);
     const userEditedDependentRef = useRef(false);
@@ -131,7 +204,7 @@ export default function EditTaskScreen() {
 
             if (typeof uid === "number" && uid > 0) {
                 setSelectedDependentUserId(uid);
-                const match = selectableDependents.find((dep) => (dep.userId ?? dep.dependentId) === uid);
+                const match = selectableDependents.find((dep) => dep.userId === uid);
                 if (match) {
                     setDependent(match.name);
                 } else if (!isPlaceholderDep) {
@@ -158,6 +231,8 @@ export default function EditTaskScreen() {
         setDateInputValue(formatDateYMD(parsedDate));
         setDueTime(parsedTime);
         setTimeInputValue(parsedTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }));
+        setReminderTime(parsedTime);
+        setReminderTimeInputValue(parsedTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }));
     }, [task?.id]);
 
     useEffect(() => {
@@ -189,7 +264,7 @@ export default function EditTaskScreen() {
 
         if (typeof uid === "number" && uid > 0) {
             setSelectedDependentUserId(uid);
-            const match = selectableDependents.find((dep) => (dep.userId ?? dep.dependentId) === uid);
+            const match = selectableDependents.find((dep) => dep.userId === uid);
             if (match) {
                 setDependent(match.name);
             } else if (!isPlaceholderDep) {
@@ -217,6 +292,15 @@ export default function EditTaskScreen() {
 
     const handleCloseTimePicker = () => {
         setShowTimePicker(false);
+    };
+
+    const handleReminderTimeChange = (time: Date) => {
+        setReminderTime(time);
+        setReminderTimeInputValue(time.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }));
+    };
+
+    const handleCloseReminderTimePicker = () => {
+        setShowReminderTimePicker(false);
     };
 
     const handleManualDateInput = (text: string) => {
@@ -266,6 +350,33 @@ export default function EditTaskScreen() {
                 const newTime = new Date(dueTime);
                 newTime.setHours(hour, minute, 0);
                 setDueTime(newTime);
+            }
+        }
+    };
+
+    const isInPast = () => {
+        const now = new Date();
+        const combined = new Date(dueDate);
+        combined.setHours(reminderTime.getHours(), reminderTime.getMinutes(), 0, 0);
+        return combined.getTime() < now.getTime();
+    };
+
+    const handleManualReminderTimeInput = (text: string) => {
+        setReminderTimeInputValue(text);
+        const timeRegex = /(\d{1,2}):(\d{2})(\s?(AM|PM|am|pm))?/;
+        const match = text.match(timeRegex);
+        if (match) {
+            let hour = parseInt(match[1], 10);
+            const minute = parseInt(match[2], 10);
+            const meridiem = match[4]?.toUpperCase();
+
+            if (meridiem === "PM" && hour !== 12) hour += 12;
+            if (meridiem === "AM" && hour === 12) hour = 0;
+
+            if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+                const newTime = new Date(reminderTime);
+                newTime.setHours(hour, minute, 0);
+                setReminderTime(newTime);
             }
         }
     };
@@ -331,7 +442,7 @@ export default function EditTaskScreen() {
         title.trim() &&
         selectedCareSpaceId &&
         (applyToAll
-            ? selectableDependents.length > 0
+            ? availableDependents.length > 0
             : typeof selectedDependentUserId === "number" && selectedDependentUserId > 0) &&
         priority !== "Select Priority" &&
         dateInputValue.trim() &&
@@ -380,13 +491,15 @@ export default function EditTaskScreen() {
             return dayDate.toISOString();
         };
 
+        const dayBasedRecurrenceType = recurringValue === "Weekly" ? "weekly" : "custom";
+
         const weeklyScheduleData = selectedRecurringDays.map((day) => {
             const dayIso = buildIsoForWeekday(day);
 
             return {
                 start_time: dayIso,
                 end_time: dayIso,
-                recurrence_type: "custom" as const,
+                recurrence_type: dayBasedRecurrenceType as "weekly" | "custom",
                 recurrence_days: day,
             };
         });
@@ -411,13 +524,33 @@ export default function EditTaskScreen() {
                 ]
                 : weeklyScheduleData;
 
-        const assignedUserIds = applyToAll
-            ? selectableDependents
-                  .map((dependent) => dependent.userId ?? dependent.dependentId)
-                  .filter((id): id is number => typeof id === "number" && id > 0)
+        const rawAssignedUserIds = applyToAll
+            ? availableDependents.map((dependent) => dependent.userId)
             : selectedDependentUserId && selectedDependentUserId > 0
                 ? [selectedDependentUserId]
                 : [];
+
+        const selectedCareSpace = careSpaces.find((space) => resolveCareSpaceNumericId(space.id) === resolvedCareSpaceId);
+        const validMemberIds = new Set(
+            [
+                ...(selectedCareSpace?.familyMembers || []).map((m) => m.userId),
+                ...(selectedCareSpace?.caregivers || []).map((m) => m.userId),
+                ...(selectedCareSpace?.dependents || []).map((m) => m.userId),
+            ].filter((id): id is number => typeof id === "number" && id > 0),
+        );
+
+        const assignedUserIds = rawAssignedUserIds.filter((id) => {
+            if (validMemberIds.size === 0) {
+                return true;
+            }
+
+            return validMemberIds.has(id);
+        });
+
+        if (assignedUserIds.length === 0) {
+            Alert.alert("Update failed", "Please select a valid dependent in this care space.");
+            return;
+        }
 
         const normalizedPriority = priority.toLowerCase() === "high"
             ? "high"
@@ -519,7 +652,7 @@ export default function EditTaskScreen() {
                                     contentStyle={styles.dropdownContent}
                                     style={styles.dropdown}
                                 >
-                                    {careSpaces.map((cs) => {
+                                    {manageableCareSpaces.map((cs) => {
                                         const numericId = resolveCareSpaceNumericId(cs.id);
                                         if (Number.isNaN(numericId) || numericId <= 0) {
                                             return null;
@@ -531,6 +664,9 @@ export default function EditTaskScreen() {
                                                     userEditedCareSpaceRef.current = true;
                                                     setCareSpace(cs.title);
                                                     setSelectedCareSpaceId(numericId);
+                                                    setApplyToAll(false);
+                                                    setDependent("Select Dependent");
+                                                    setSelectedDependentUserId(null);
                                                     setMenuVisible1(false);
                                                 }}
                                                 title={cs.title}
@@ -561,18 +697,14 @@ export default function EditTaskScreen() {
                                     contentStyle={styles.dropdownContent}
                                     style={styles.dropdown}
                                 >
-                                    {selectableDependents.map((dependent) => {
-                                        const resolvedUserId = dependent.userId ?? dependent.dependentId;
-                                        if (typeof resolvedUserId !== "number") {
-                                            return null;
-                                        }
+                                    {availableDependents.map((dependent) => {
                                         return (
                                             <Menu.Item
-                                                key={`dependent-menu-${dependent.id}-${resolvedUserId}`}
+                                                key={`dependent-menu-${dependent.key}`}
                                                 onPress={() => {
                                                     userEditedDependentRef.current = true;
                                                     setDependent(dependent.name);
-                                                    setSelectedDependentUserId(resolvedUserId);
+                                                    setSelectedDependentUserId(dependent.userId);
                                                     setMenuVisible2(false);
                                                 }}
                                                 title={dependent.name}
@@ -598,7 +730,7 @@ export default function EditTaskScreen() {
                                         }}
                                         color="#7C6FDC"
                                     />
-                                    <Text style={styles.inputSubTitle}>Apply to all dependents</Text>
+                                    <Text style={styles.inputSubTitle}>Apply to all dependents in this care space</Text>
                                 </View>
 
                                 <Text style={styles.inputTitle}>Task Title *</Text>
@@ -846,6 +978,36 @@ export default function EditTaskScreen() {
                                     />
                                 </View>
 
+                                {isReminderEnabled && (
+                                    <View style={styles.datePickerContainer}>
+                                        {Platform.OS !== 'web' ? (
+                                            <Pressable onPress={() => setShowReminderTimePicker(true)}>
+                                                <TextInput
+                                                    value={reminderTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                                    mode="outlined"
+                                                    editable={false}
+                                                    pointerEvents="none"
+                                                    placeholder="HH:MM"
+                                                    right={<TextInput.Icon icon="clock" />}
+                                                    outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                                    style={styles.inputField}
+                                                />
+                                            </Pressable>
+                                        ) : (
+                                            <TextInput
+                                                value={reminderTimeInputValue}
+                                                onChangeText={handleManualReminderTimeInput}
+                                                mode="outlined"
+                                                editable
+                                                placeholder="HH:MM"
+                                                right={<TextInput.Icon icon="clock" />}
+                                                outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }}
+                                                style={styles.inputField}
+                                            />
+                                        )}
+                                    </View>
+                                )}
+
                                 <View style={styles.buttonContainer}>
                                     <Pressable style={styles.cancelButton} onPress={() => router.back()}>
                                         <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -874,6 +1036,24 @@ export default function EditTaskScreen() {
                 onTimeChange={handleTimeChange}
                 onClose={handleCloseTimePicker}
             />
+
+            <CustomTimePickerModal
+                visible={showReminderTimePicker}
+                time={reminderTime}
+                onTimeChange={handleReminderTimeChange}
+                onClose={handleCloseReminderTimePicker}
+            />
+
+            {isReminderEnabled && !isInPast() && (
+                <ReminderModal
+                    dueDate={dueDate}
+                    dueTime={reminderTime}
+                    title="Task Reminder"
+                    message={`${title || "Task"} is due now.`}
+                    onClose={() => {}}
+                    checkIntervalMs={1000}
+                />
+            )}
         </LinearGradient>
     );
 }

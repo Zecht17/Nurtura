@@ -11,15 +11,26 @@ export default function SignUpScreen() {
   const pathname = usePathname();
   const router = useRouter();
 
+  const roleOptions = [
+    { value: "family_member", label: "Family Member" },
+    { value: "caregiver", label: "Caregiver" },
+  ];
+
+  const sexOptions = [
+    { value: "female", label: "Female" },
+    { value: "male", label: "Male" },
+    { value: "other", label: "Other" },
+  ];
+
   // Form states
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("Select Role");
+  const [role, setRole] = useState("");
   const [menuVisible, setMenuVisible] = useState(false);
-  const [sex, setSex] = useState("Select Sex");
+  const [sex, setSex] = useState("");
   const [sexMenuVisible, setSexMenuVisible] = useState(false);
   const [birthDate, setBirthDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -30,6 +41,9 @@ export default function SignUpScreen() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const isDatePickerSupported = Platform.OS !== "web";
+
+  const selectedRoleLabel = roleOptions.find((option) => option.value === role)?.label || "Select Role";
+  const selectedSexLabel = sexOptions.find((option) => option.value === sex)?.label || "Select Sex";
 
   const formatDateYMD = (date: Date) => {
     const year = date.getFullYear();
@@ -88,7 +102,7 @@ export default function SignUpScreen() {
       Alert.alert("Error", "Passwords do not match");
       return;
     }
-    if (role === "Select Role" || sex === "Select Sex") {
+    if (!role || !sex) {
       Alert.alert("Error", "Please select a role and sex");
       return;
     }
@@ -246,7 +260,7 @@ export default function SignUpScreen() {
                   anchor={
                     <Pressable onPress={() => setMenuVisible(true)}>
                       <TextInput
-                        value={role}
+                        value={selectedRoleLabel}
                         editable={false}
                         mode="outlined"
                         pointerEvents="none"
@@ -259,8 +273,16 @@ export default function SignUpScreen() {
                     contentStyle={styles.dropdownContent}
                     style={styles.dropdown}
                 >
-                  <Menu.Item onPress={() => { setRole("family_member"); setMenuVisible(false); }} title="Family Member" />
-                  <Menu.Item onPress={() => { setRole("caregiver"); setMenuVisible(false); }} title="Caregiver" />
+                  {roleOptions.map((option) => (
+                    <Menu.Item
+                      key={option.value}
+                      onPress={() => {
+                        setRole(option.value);
+                        setMenuVisible(false);
+                      }}
+                      title={option.label}
+                    />
+                  ))}
                 </Menu>
               </View>
 
@@ -273,7 +295,7 @@ export default function SignUpScreen() {
                   anchor={
                     <Pressable onPress={() => setSexMenuVisible(true)}>
                       <TextInput
-                        value={sex}
+                        value={selectedSexLabel}
                         editable={false}
                         mode="outlined"
                         pointerEvents="none"
@@ -286,9 +308,16 @@ export default function SignUpScreen() {
                     contentStyle={styles.dropdownContent}
                     style={styles.dropdown}
                 >
-                  <Menu.Item onPress={() => { setSex("female"); setSexMenuVisible(false); }} title="Female" />
-                  <Menu.Item onPress={() => { setSex("male"); setSexMenuVisible(false); }} title="Male" />
-                  <Menu.Item onPress={() => { setSex("other"); setSexMenuVisible(false); }} title="Other" />
+                  {sexOptions.map((option) => (
+                    <Menu.Item
+                      key={option.value}
+                      onPress={() => {
+                        setSex(option.value);
+                        setSexMenuVisible(false);
+                      }}
+                      title={option.label}
+                    />
+                  ))}
                 </Menu>
               </View>
             </View>

@@ -145,7 +145,7 @@ export default function TaskDetails() {
 
     const displayDependent = useMemo(() => {
         if (task) {
-            return resolveDependentDisplayName(task, dependents, selfDependentResolution);
+            return resolveDependentDisplayName(task, dependents, selfDependentResolution, careSpaces);
         }
         if (taskDetail) {
             const synthetic: Task = {
@@ -158,7 +158,7 @@ export default function TaskDetails() {
                 completions: taskDetail.completions,
                 schedules: taskDetail.schedules,
             };
-            return resolveDependentDisplayName(synthetic, dependents, selfDependentResolution);
+            return resolveDependentDisplayName(synthetic, dependents, selfDependentResolution, careSpaces);
         }
         return "Not set";
     }, [task, taskDetail, dependents, id, numericTaskId, selfDependentResolution]);

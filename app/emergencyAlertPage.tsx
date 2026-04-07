@@ -21,7 +21,7 @@ const EmergencyAlertPage = () => {
         <Pressable style={styles.primaryButton}>
           <Text style={styles.primaryButtonText}>Send Another Alert</Text>
         </Pressable>
-        <Pressable style={styles.secondaryButton} onPress={() => router.replace('/') }>
+        <Pressable style={styles.secondaryButton} onPress={() => router.push('/') }>
           <Text style={styles.secondaryButtonText}>←  Back to Dashboard</Text>
         </Pressable>
       </View>

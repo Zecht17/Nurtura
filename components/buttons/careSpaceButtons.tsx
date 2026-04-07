@@ -21,58 +21,75 @@ type Props = {
     joinStyle?: StyleProp<ViewStyle>;
     onCreateCareSpace?: (payload: CreateCareSpacePayload) => Promise<void> | void;
     onJoinCareSpace?: (code: string) => Promise<void> | void;
+    showCreateButton?: boolean;
+    showJoinButton?: boolean;
 };
 
-export default function CareButtons({ createStyle, joinStyle, onCreateCareSpace, onJoinCareSpace }: Props) {
+export default function CareButtons({
+    createStyle,
+    joinStyle,
+    onCreateCareSpace,
+    onJoinCareSpace,
+    showCreateButton = true,
+    showJoinButton = true,
+}: Props) {
     const { width } = useWindowDimensions();
     const tokens = getResponsiveTokens(width);
     const textSize = scaleByWidth(width, 14, 12, 14);
     const [isCreateVisible, setIsCreateVisible] = useState(false);
     const [isJoinVisible, setIsJoinVisible] = useState(false);
 
+    if (!showCreateButton && !showJoinButton) {
+        return null;
+    }
+
     return (
         <View style={styles.buttonRow}>
-            <Pressable
-			style={({ pressed }) => [
-				{ flex: 1 },
-				{ opacity: pressed ? 0.5 : 1 },
-				createStyle,
-			]}
-			onPress={() => setIsCreateVisible(true)}
-		>
-                <LinearGradient
-                    colors={["#7C6FDC", "rgb(137, 94, 170)"]}
-                    start={{ x: 0.3706, y: 0.0171 }}
-                    end={{ x: 0.6294, y: 1 }}
-                    style={[styles.createButton, styles.createButtonGradient]}
-                >
-                    <View style={styles.createButton}>
-                        <FontAwesome6 name="add" size={16} color="white" />
-                        <Text numberOfLines={1} style={[styles.cbuttonText, { fontSize: textSize || tokens.bodySmall }]}>Create Care Space</Text>
-                    </View>
-                </LinearGradient>
-            </Pressable>
+            {showCreateButton ? (
+                <Pressable
+				style={({ pressed }) => [
+					{ flex: 1 },
+					{ opacity: pressed ? 0.5 : 1 },
+					createStyle,
+				]}
+				onPress={() => setIsCreateVisible(true)}
+			>
+                    <LinearGradient
+                        colors={["#7C6FDC", "rgb(137, 94, 170)"]}
+                        start={{ x: 0.3706, y: 0.0171 }}
+                        end={{ x: 0.6294, y: 1 }}
+                        style={[styles.createButton, styles.createButtonGradient]}
+                    >
+                        <View style={styles.createButton}>
+                            <FontAwesome6 name="add" size={16} color="white" />
+                            <Text numberOfLines={1} style={[styles.cbuttonText, { fontSize: textSize || tokens.bodySmall }]}>Create Care Space</Text>
+                        </View>
+                    </LinearGradient>
+                </Pressable>
+            ) : null}
 
-            <Pressable
-            style={({ pressed }) => [
-                { flex: 1 },
-                { opacity: pressed ? 0.5 : 1 },
-                joinStyle,
-            ]}
-            onPress={() => setIsJoinVisible(true)}
-        >
-                <LinearGradient
-                    colors={["#ffffff", "#dbdbdb"]}
-                    start={{ x: 0.3706, y: 0.0171 }}
-                    end={{ x: 0.6294, y: 1 }}
-                    style={[styles.joinButton, styles.joinButtonGradient]}
-                >
-                    <View style={styles.joinButton}>
-                        <AntDesign name="user-add" size={16} color="#7C6FDC" />
-                        <Text numberOfLines={1} style={[styles.jbuttonText, { fontSize: textSize || tokens.bodySmall }]}>Join Care Space</Text>
-                    </View>
-                </LinearGradient>
-            </Pressable>
+            {showJoinButton ? (
+                <Pressable
+                style={({ pressed }) => [
+                    { flex: 1 },
+                    { opacity: pressed ? 0.5 : 1 },
+                    joinStyle,
+                ]}
+                onPress={() => setIsJoinVisible(true)}
+            >
+                    <LinearGradient
+                        colors={["#ffffff", "#dbdbdb"]}
+                        start={{ x: 0.3706, y: 0.0171 }}
+                        end={{ x: 0.6294, y: 1 }}
+                        style={[styles.joinButton, styles.joinButtonGradient]}
+                    >
+                        <View style={styles.joinButton}>
+                            <AntDesign name="user-add" size={16} color="#7C6FDC" />
+                            <Text numberOfLines={1} style={[styles.jbuttonText, { fontSize: textSize || tokens.bodySmall }]}>Join Care Space</Text>
+                        </View>
+                    </LinearGradient>
+                </Pressable>
+            ) : null}
 
             <JoinCareSpaceModal
                 visible={isJoinVisible}

@@ -1,4 +1,3 @@
-import EmergencyAlert from "@/components/buttons/dependentSide/emergencyAlert";
 import CompleteTaskModal from "@/components/modals/CompleteTaskModal";
 import RecurringDayStatusTags, { getRecurringPatternBase } from "@/components/tags/date/recurringDayStatusTags";
 import LowPriorityStatus from "@/components/tags/priority/lowPriority";
@@ -95,7 +94,7 @@ export default function Index() {
   const [nowMs, setNowMs] = useState(Date.now());
   const { dependents } = useDependents();
   const { careSpaces } = useCareSpaces();
-  const { tasks, completeTaskAsUser, listMyTasks, listCreatedByMeTasks } = useTasks();
+  const { tasks, completeTaskAsUser, listMyTasks, listCreatedByMeTasks, listTasksByMember } = useTasks();
   StatusBar.setBarStyle("dark-content");
 
   /** Only tasks in care spaces the user belongs to (avoids stale rows from another account/session). */
@@ -103,9 +102,9 @@ export default function Index() {
     const numericIds = careSpaces
       .map((cs) => parseCareSpaceNumericIdFromString(cs.id))
       .filter((n): n is number => typeof n === "number" && n > 0);
-    if (numericIds.length === 0) return tasks;
+    if (numericIds.length === 0) return [];
     return tasks.filter((task) => {
-      if (task.careSpaceId == null) return true;
+      if (task.careSpaceId == null) return false;
       return numericIds.includes(task.careSpaceId);
     });
   }, [tasks, careSpaces]);
@@ -114,6 +113,73 @@ export default function Index() {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!user?.access_token || isDependentAccount) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const careSpaceMemberPairs = careSpaces.flatMap((careSpace) => {
+      const careSpaceNumericId = parseCareSpaceNumericIdFromString(careSpace.id);
+      if (typeof careSpaceNumericId !== "number" || careSpaceNumericId <= 0) {
+        return [] as Array<{ careSpaceId: number; memberUserId: number }>;
+      }
+
+      const userIdsFromDependents = (careSpace.dependents || [])
+        .map((dependent) => {
+          if (typeof dependent.userId === "number" && dependent.userId > 0) {
+            return dependent.userId;
+          }
+
+          const matched = dependents.find(
+            (localDependent) => localDependent.name.trim().toLowerCase() === dependent.name.trim().toLowerCase(),
+          );
+
+          return matched?.userId ?? matched?.dependentId;
+        })
+        .filter((id): id is number => typeof id === "number" && id > 0);
+
+      const userIdsFromFamily = (careSpace.familyMembers || [])
+        .map((member) => member.userId)
+        .filter((id): id is number => typeof id === "number" && id > 0);
+
+      const userIdsFromCaregivers = (careSpace.caregivers || [])
+        .map((member) => member.userId)
+        .filter((id): id is number => typeof id === "number" && id > 0);
+
+      const uniqueMemberUserIds = Array.from(
+        new Set([...userIdsFromDependents, ...userIdsFromFamily, ...userIdsFromCaregivers]),
+      );
+
+      return uniqueMemberUserIds.map((memberUserId) => ({
+        careSpaceId: careSpaceNumericId,
+        memberUserId,
+      }));
+    });
+
+    if (careSpaceMemberPairs.length === 0) {
+      return;
+    }
+
+    (async () => {
+      const requests: Array<Promise<unknown>> = [];
+
+      careSpaceMemberPairs.forEach(({ careSpaceId, memberUserId }) => {
+        requests.push(listTasksByMember(memberUserId, careSpaceId).catch(() => undefined));
+      });
+
+      if (!cancelled && requests.length > 0) {
+        await Promise.all(requests);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- listTasksByMember from context is intentionally omitted to avoid fetch loops
+  }, [user?.access_token, isDependentAccount, careSpaces, dependents]);
 
   // This logic if for the taskCard when a task is inserted
   const statusTagByStatus = {
@@ -236,7 +302,7 @@ export default function Index() {
   };
 
   return (
-    <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]}>
+    <LinearGradient colors={["#E3F2FD", "#F3E5F8", "#E8E4F8"]} style={styles.gradient}>
     <ScrollView
       contentContainerStyle={[
         styles.scrollContent,
@@ -276,7 +342,8 @@ export default function Index() {
             </View>
           ) : (
             <View style={[styles.dependentEmergencyWrap, { paddingHorizontal: sectionInset }]}> 
-              <EmergencyAlert />
+              {/* <TodayTasksCard nowMs={nowMs} tasks={tasksVisibleOnHome} /> */}
+              {/* <EmergencyAlert /> */}
             </View>
           )}
 
@@ -341,7 +408,7 @@ export default function Index() {
                       : () => setPendingCompleteId(task.id)
                   }
                   title={task.title}
-                  dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution)}
+                  dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution, careSpaces)}
                   description={task.description}
                   statusTags={
                     <>
@@ -424,6 +491,10 @@ export default function Index() {
 }
 
 export const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+
   scrollContent: {
     paddingBottom: 24,
     flexGrow: 1,
@@ -475,9 +546,9 @@ export const styles = StyleSheet.create({
   },
 
   dependentEmergencyWrap: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 12,
+    // paddingHorizontal: 20,
+    // paddingTop: 4,
+    // paddingBottom: 12,
   },
 
   cardsRow: {

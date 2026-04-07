@@ -27,13 +27,12 @@ import {
     resolveTaskCareSpaceId,
 } from "@/utils/resolveTaskCareSpaceId";
 import { getResponsiveTokens, scaleByWidth } from "@/utils/responsive";
-import { collectAssigneeIdsFromTask } from "@/utils/taskAssigneeIds";
 import { computeComputedTaskStatus, parseLocalDueDateTime } from "@/utils/taskDueDate";
 import { isDependentRole } from "@/utils/userRole";
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, TextInput as RNTextInput, ScrollView, StatusBar, StyleSheet, Text, UIManager, View, useWindowDimensions } from "react-native";
 import { Menu, TextInput } from "react-native-paper";
@@ -45,6 +44,14 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export default function TaskScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams<{
+        fromNotification?: string;
+        notificationId?: string;
+        notificationType?: string;
+        notificationTitle?: string;
+        notificationMessage?: string;
+        notificationCreatedAt?: string;
+    }>();
     const { width } = useWindowDimensions();
     const tokens = getResponsiveTokens(width);
     const compact = width < 350;
@@ -81,6 +88,12 @@ export default function TaskScreen() {
     const [selectedStatus, setSelectedStatus] = useState("pending");
     const [loadingTasks, setLoadingTasks] = useState(false);
     const [taskLoadError, setTaskLoadError] = useState<string | null>(null);
+    const [notificationPreview, setNotificationPreview] = useState<{
+        id: string;
+        title: string;
+        message: string;
+        createdAt?: string;
+    } | null>(null);
     // For the date and time
     const [nowMs, setNowMs] = useState(Date.now());
     useEffect(() => {
@@ -98,16 +111,77 @@ export default function TaskScreen() {
 
     const selfDependentResolution = useMemo(() => selfDependentContextFromProfile(profileData), [profileData]);
 
+    useEffect(() => {
+        if (isDependentAccount && selectedAssignee === "createdByMe") {
+            setSelectedAssignee("myTasks");
+        }
+    }, [isDependentAccount, selectedAssignee]);
+
+    useEffect(() => {
+        const fromNotification = params.fromNotification === "1";
+        const title = typeof params.notificationTitle === "string" ? params.notificationTitle : "";
+        const message = typeof params.notificationMessage === "string" ? params.notificationMessage : "";
+        const id = typeof params.notificationId === "string" ? params.notificationId : "";
+
+        if (!fromNotification || !title || !message || !id) {
+            return;
+        }
+
+        setNotificationPreview({
+            id,
+            title,
+            message,
+            createdAt: typeof params.notificationCreatedAt === "string" ? params.notificationCreatedAt : undefined,
+        });
+
+        const normalized = `${title} ${message}`.toLowerCase();
+        if (normalized.includes("missing") || normalized.includes("overdue")) {
+            setSelectedStatus("missing");
+        }
+
+        const taskTitleMatch = message.match(/^(.+?)\s+is now marked as missing\.?$/i);
+        if (taskTitleMatch?.[1]) {
+            setSearchQuery(taskTitleMatch[1].trim());
+        }
+    }, [
+        params.fromNotification,
+        params.notificationId,
+        params.notificationTitle,
+        params.notificationMessage,
+        params.notificationCreatedAt,
+    ]);
+
     const tasksInUserCareSpaces = useMemo(() => {
         const numericIds = careSpaces
             .map((cs) => parseCareSpaceNumericIdFromString(cs.id))
             .filter((n): n is number => typeof n === "number" && n > 0);
-        if (numericIds.length === 0) return tasks;
+        if (numericIds.length === 0) return [];
         return tasks.filter((task) => {
-            if (task.careSpaceId == null) return true;
+            if (task.careSpaceId == null) return false;
             return numericIds.includes(task.careSpaceId);
         });
     }, [tasks, careSpaces]);
+
+    const careSpaceRoleById = useMemo(() => {
+        const roleMap = new Map<number, string | undefined>();
+
+        careSpaces.forEach((careSpace) => {
+            const numericId = parseCareSpaceNumericIdFromString(careSpace.id);
+            if (typeof numericId === "number" && numericId > 0) {
+                roleMap.set(numericId, careSpace.currentUserRole);
+            }
+        });
+
+        return roleMap;
+    }, [careSpaces]);
+
+    const canManageTaskInCareSpace = (taskCareSpaceId?: number) => {
+        if (isDependentAccount) return false;
+        if (typeof taskCareSpaceId !== "number") return true;
+
+        const role = careSpaceRoleById.get(taskCareSpaceId);
+        return role === "Owner" || role === "Editor";
+    };
 
     const fallbackSingleCareSpaceNumericId = useMemo(() => {
         if (careSpaces.length !== 1) return null;
@@ -147,6 +221,60 @@ export default function TaskScreen() {
         })
         .filter((item): item is { userId: number; name: string } => !!item);
 
+    const memberUserIdsByCareSpace = useMemo(() => {
+        const result = new Map<number, number[]>();
+
+        careSpaces.forEach((careSpace) => {
+            const numericCareSpaceId = parseCareSpaceNumericIdFromString(careSpace.id);
+            if (typeof numericCareSpaceId !== "number" || numericCareSpaceId <= 0) {
+                return;
+            }
+
+            const ids = [
+                ...(careSpace.familyMembers || []).map((member) => member.userId),
+                ...(careSpace.caregivers || []).map((member) => member.userId),
+                ...(careSpace.dependents || []).map((dependent) => dependent.userId),
+            ].filter((id): id is number => typeof id === "number" && id > 0);
+
+            if (ids.length > 0) {
+                result.set(numericCareSpaceId, [...new Set(ids)]);
+            }
+        });
+
+        return result;
+    }, [careSpaces]);
+
+    const fetchSharedCareSpaceTasks = async (statusQuery: "pending" | "completed" | "missed") => {
+        const scopedCareSpaceIds = selectedCareSpaceId === null
+            ? Array.from(memberUserIdsByCareSpace.keys())
+            : [selectedCareSpaceId];
+
+        const memberRequests: Array<Promise<unknown>> = [];
+        const seen = new Set<string>();
+
+        scopedCareSpaceIds.forEach((careSpaceNumericId) => {
+            const memberUserIds = memberUserIdsByCareSpace.get(careSpaceNumericId) || [];
+            memberUserIds.forEach((memberUserId) => {
+                const key = `${careSpaceNumericId}-${memberUserId}`;
+                if (seen.has(key)) {
+                    return;
+                }
+
+                seen.add(key);
+                memberRequests.push(
+                    listTasksByMember(memberUserId, careSpaceNumericId).catch(() => undefined),
+                );
+            });
+        });
+
+        if (memberRequests.length > 0) {
+            await Promise.all(memberRequests);
+        }
+
+        await listMyTasks({ dateFilter: "all", status: statusQuery });
+        await listCreatedByMeTasks({ dateFilter: "all", status: statusQuery });
+    };
+
     const selectedAssigneeLabel =
         selectedAssignee === "myTasks"
             ? "My tasks"
@@ -177,9 +305,7 @@ export default function TaskScreen() {
 
             try {
                 if (selectedAssignee === "myTasks") {
-                    // Tasks assigned to you AND tasks you created for others (same as Home/Calendar visibility).
-                    await listMyTasks({ dateFilter: "all", status: statusQuery });
-                    await listCreatedByMeTasks({ dateFilter: "all", status: statusQuery });
+                    await fetchSharedCareSpaceTasks(statusQuery);
                     return;
                 }
 
@@ -216,7 +342,7 @@ export default function TaskScreen() {
         // function references on every TasksProvider render, which would retrigger this effect
         // after every fetch (setTasks) and keep "Loading tasks..." stuck on screen.
         // eslint-disable-next-line react-hooks/exhaustive-deps -- list* from context intentionally omitted
-    }, [selectedAssignee, selectedCareSpaceId, selectedStatus]);
+    }, [selectedAssignee, selectedCareSpaceId, selectedStatus, memberUserIdsByCareSpace]);
     const decoratedTasks = tasksInUserCareSpaces.map((task) => {
         const due = parseLocalDueDateTime(task.dueDate, task.dueTime);
         const computedStatus = computeComputedTaskStatus(task.status, due, nowMs);
@@ -244,28 +370,7 @@ export default function TaskScreen() {
         }
 
         if (typeof currentUserId === "number" && currentUserId > 0) {
-            if (selectedAssignee === "myTasks") {
-                const iCreated =
-                    typeof task.assignedByUserId === "number" && task.assignedByUserId === currentUserId;
-                /** Local row from createTask (TasksProvider) until lists return full assignment metadata */
-                const iCreatedOptimistic = task.clientCreatedAt != null;
-                const isCreator = iCreated || iCreatedOptimistic;
-                const assigneeIds = collectAssigneeIdsFromTask(task);
-                const assignedToMe =
-                    (task.assignedUserIds?.includes(currentUserId) ?? false) || assigneeIds.includes(currentUserId);
-                const hasAssigneeHint =
-                    (task.assignedUserIds && task.assignedUserIds.length > 0) || assigneeIds.length > 0;
-                if (hasAssigneeHint) {
-                    if (!assignedToMe && !isCreator) {
-                        return false;
-                    }
-                } else if (task.assignedByUserId != null && !isCreator) {
-                    /** Dependent: list payloads often only set `assigned_by` (caregiver); `/tasks/me` still scopes to their tasks. */
-                    if (!isDependentAccount) {
-                        return false;
-                    }
-                }
-            } else if (selectedAssignee === "createdByMe") {
+            if (selectedAssignee === "createdByMe") {
                 if (task.assignedByUserId != null && task.assignedByUserId !== currentUserId) {
                     return false;
                 }
@@ -284,7 +389,7 @@ export default function TaskScreen() {
 
         const titleText = (task.title ?? "").toLowerCase();
         const descriptionText = (task.description ?? "").toLowerCase();
-        const dependentText = resolveDependentDisplayName(task, dependents, selfDependentResolution).toLowerCase();
+        const dependentText = resolveDependentDisplayName(task, dependents, selfDependentResolution, careSpaces).toLowerCase();
         const searchableText = `${titleText} ${descriptionText} ${dependentText}`;
 
         return normalizedKeywordTokens.every((token) => searchableText.includes(token));
@@ -379,6 +484,16 @@ export default function TaskScreen() {
                         </View>
                         {!isDependentAccount && <AddTaskButton style={compact && styles.headerActionButtonCompact} />}
                     </View>
+
+                    {notificationPreview && (
+                        <View style={[styles.notificationPreviewCard, { marginHorizontal: controlsInset }]}>
+                            <Text style={styles.notificationPreviewTitle}>{notificationPreview.title}</Text>
+                            <Text style={styles.notificationPreviewMessage}>{notificationPreview.message}</Text>
+                            <Pressable onPress={() => setNotificationPreview(null)}>
+                                <Text style={styles.notificationPreviewDismiss}>Dismiss</Text>
+                            </Pressable>
+                        </View>
+                    )}
                     
                     {/* Search Bar */}
                     <View style={[styles.searchContainer, { marginHorizontal: controlsInset }]}>
@@ -423,14 +538,16 @@ export default function TaskScreen() {
                                 title="My tasks"
                                 titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]}
                             />
-                            <Menu.Item
-                                onPress={() => {
-                                    setSelectedAssignee("createdByMe");
-                                    setMenuVisible1(false);
-                                }}
-                                title="Tasks Created by Me"
-                                titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]}
-                            />
+                            {!isDependentAccount && (
+                                <Menu.Item
+                                    onPress={() => {
+                                        setSelectedAssignee("createdByMe");
+                                        setMenuVisible1(false);
+                                    }}
+                                    title="Tasks Created by Me"
+                                    titleStyle={[styles.dropdownItemText, { fontSize: tokens.menuText }]}
+                                />
+                            )}
                             {dependentOptions.map((option) => (
                                 <Menu.Item
                                     key={`dep-option-${option.userId}`}
@@ -540,22 +657,25 @@ export default function TaskScreen() {
                             )}
                             {/* This is for the insert function, this will display the created task */}
                             {filteredTasks.map((task) => (
+                                (() => {
+                                    const canManageTask = canManageTaskInCareSpace(task.careSpaceId);
+                                    return (
                                 <EditableTaskCard
                                     key={task.id}
                                     value={task.id}
                                     selectedTask={null}
                                     onSelect={() => {}}
-                                    editable={!isDependentAccount}
+                                    editable={canManageTask}
                                     isCompleted={task.computedStatus === "completed"}
                                     onRadioPress={
-                                        isDependentAccount
+                                        !canManageTask
                                             ? undefined
                                             : task.computedStatus !== "completed"
                                               ? () => setPendingCompleteId(task.id)
                                               : undefined
                                     }
                                     title={task.title}
-                                    dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution)}
+                                    dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution, careSpaces)}
                                     description={task.description}
                                     statusTags={
                                         <>
@@ -573,14 +693,17 @@ export default function TaskScreen() {
                                             {renderDateTag(task.dueDate, task.dueTime)}
                                         </>
                                     }
-                                    onEdit={() =>
-                                        router.push({
-                                            pathname: "/editTaskPage",
-                                            params: {
-                                                id: task.id,
-                                                careSpaceId: task.careSpaceId ? String(task.careSpaceId) : undefined,
-                                            },
-                                        })
+                                    onEdit={
+                                        canManageTask
+                                            ? () =>
+                                                router.push({
+                                                    pathname: "/editTaskPage",
+                                                    params: {
+                                                        id: task.id,
+                                                        careSpaceId: task.careSpaceId ? String(task.careSpaceId) : undefined,
+                                                    },
+                                                })
+                                            : undefined
                                     }
                                     onPress={() =>
                                         router.push({
@@ -591,8 +714,10 @@ export default function TaskScreen() {
                                             },
                                         })
                                     }
-                                    onDelete={() => setPendingDeleteId(task.id)}
+                                    onDelete={canManageTask ? () => setPendingDeleteId(task.id) : undefined}
                                 />
+                                    );
+                                })()
                             ))}
                                                 <CompleteTaskModal
                                                     visible={pendingCompleteId !== null}
@@ -613,8 +738,7 @@ export default function TaskScreen() {
                                                                     ? "missed"
                                                                     : (selectedStatus as "pending" | "completed");
                                                             if (selectedAssignee === "myTasks") {
-                                                                await listMyTasks({ dateFilter: "all", status: refreshStatus });
-                                                                await listCreatedByMeTasks({ dateFilter: "all", status: refreshStatus });
+                                                                await fetchSharedCareSpaceTasks(refreshStatus);
                                                             } else if (selectedAssignee === "createdByMe") {
                                                                 await listCreatedByMeTasks({
                                                                     dateFilter: "all",
@@ -655,6 +779,11 @@ export default function TaskScreen() {
                                 }
                                 if (numericCareSpaceId === undefined) {
                                     Alert.alert("Delete failed", "Unable to resolve care space ID for this task.");
+                                    return;
+                                }
+
+                                if (!canManageTaskInCareSpace(numericCareSpaceId)) {
+                                    Alert.alert("Permission Denied", "Only care space owners or editors can delete tasks in this care space.");
                                     return;
                                 }
                                 try {
@@ -709,6 +838,33 @@ export const styles = StyleSheet.create({
 
     headerActionButtonCompact: {
         alignSelf: "flex-start",
+    },
+
+    notificationPreviewCard: {
+        backgroundColor: "#FFF7ED",
+        borderColor: "#FDBA74",
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 10,
+        gap: 6,
+    },
+
+    notificationPreviewTitle: {
+        color: "#9A3412",
+        fontWeight: "700",
+        fontSize: 15,
+    },
+
+    notificationPreviewMessage: {
+        color: "#7C2D12",
+        fontSize: 13,
+    },
+
+    notificationPreviewDismiss: {
+        color: "#B45309",
+        fontWeight: "700",
+        fontSize: 12,
     },
 
     headerTitle: {

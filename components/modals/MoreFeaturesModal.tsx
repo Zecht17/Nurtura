@@ -1,3 +1,6 @@
+import { useAuth } from "@/context/AuthContext";
+import { useUser } from "@/context/UserContext";
+import { normalizeUserRole } from "@/utils/userRole";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -32,6 +35,12 @@ const FEATURES: FeatureItem[] = [
         route: "/dependentProfile",
     },
     {
+        title: "Notifications",
+        subtitle: "Manage notification settings",
+        icon: <Ionicons name="notifications-outline" size={22} color="#7C6FDC" />,
+        route: "/notifications",
+    },
+    {
         title: "AI Assistant",
         subtitle: "Get personalized help",
         icon: <Ionicons name="sparkles-outline" size={22} color="#7C6FDC" />,
@@ -47,6 +56,19 @@ const FEATURES: FeatureItem[] = [
 
 export default function MoreFeaturesModal({ visible, onClose }: MoreFeaturesModalProps) {
     const insets = useSafeAreaInsets();
+    const { user } = useAuth();
+    const { profileData } = useUser();
+
+    const normalizedRole = normalizeUserRole(profileData?.role ?? user?.role);
+    const hideDependentProfile = normalizedRole === "dependent" || normalizedRole === "caregiver";
+
+    const visibleFeatures = FEATURES.filter((item) => {
+        if (!hideDependentProfile) {
+            return true;
+        }
+
+        return item.route !== "/dependentProfile";
+    });
 
     const handleNavigate = (route?: string) => {
         if (!route) return;
@@ -67,7 +89,7 @@ export default function MoreFeaturesModal({ visible, onClose }: MoreFeaturesModa
                     </View>
 
                         <ScrollView contentContainerStyle={styles.list}>
-                            {FEATURES.map((item) => (
+                            {visibleFeatures.map((item) => (
                                 <Pressable
                                     key={item.title}
                                     style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}

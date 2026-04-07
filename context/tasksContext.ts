@@ -123,29 +123,49 @@ export function TasksProvider({ children }: { children: ReactNode }) {
 
     const listMyTasksRef = useRef<((filters?: TaskListFilters) => Promise<Task[]>) | null>(null);
     const listCreatedByMeTasksRef = useRef<((filters?: TaskListFilters) => Promise<Task[]>) | null>(null);
-    const sessionUsernameRef = useRef<string | null>(null);
+    const sessionIdentityRef = useRef<string | null>(null);
 
     /** Drop stale rows when logging out or switching accounts (merge/preserve must not carry over sessions). */
     useEffect(() => {
         if (!user?.access_token) {
             setTasks([]);
-            sessionUsernameRef.current = null;
+            sessionIdentityRef.current = null;
             return;
         }
-        const uname = user.username ?? "";
-        if (sessionUsernameRef.current !== null && sessionUsernameRef.current !== uname) {
+
+        // Username alone can be missing/empty in some auth payloads; include role + refresh token
+        // so account switches always clear in-memory tasks before refetch.
+        const identity = `${user.username ?? ""}|${user.role ?? ""}|${user.refresh_token ?? ""}`;
+
+        if (sessionIdentityRef.current !== null && sessionIdentityRef.current !== identity) {
             setTasks([]);
         }
-        sessionUsernameRef.current = uname;
-    }, [user?.access_token, user?.username]);
+
+        sessionIdentityRef.current = identity;
+    }, [user?.access_token, user?.username, user?.role, user?.refresh_token]);
 
     const addTask = (task: Task) => {
         setTasks((prev) => [...prev, task]);
     };
 
     const parseApiError = (responsePayload: any): string => {
+        if (typeof responsePayload === "string") {
+            const trimmed = responsePayload.trim();
+            if (trimmed) {
+                return trimmed;
+            }
+        }
+
         if (Array.isArray(responsePayload?.detail)) {
             return responsePayload.detail.map((item: any) => item?.msg).filter(Boolean).join(", ");
+        }
+
+        if (responsePayload?.detail && typeof responsePayload.detail === "object") {
+            try {
+                return JSON.stringify(responsePayload.detail);
+            } catch {
+                return "Unable to process task request.";
+            }
         }
 
         if (typeof responsePayload?.detail === "string") {
@@ -177,18 +197,23 @@ export function TasksProvider({ children }: { children: ReactNode }) {
             (id, index, ids) => Number.isInteger(id) && id > 0 && ids.indexOf(id) === index,
         );
 
-        const requestBody = {
-            task_data: {
-                title: trimmedTitle,
-                description: payload.taskData.description.trim(),
-                due_date: payload.taskData.dueAtIso ?? payload.taskData.dueDate,
-                priority: payload.taskData.priority.toLowerCase(),
-            },
-            assigned_user_ids: sanitizedAssignedUserIds,
-            schedule_data: payload.scheduleData,
-        };
+        const sendCreateRequest = async (
+            accessToken: string,
+            dueDateValue: string,
+            scheduleDataOverride: CreateTaskPayload["scheduleData"] | null,
+        ) => {
+            const shouldSendScheduleData = Array.isArray(scheduleDataOverride) && scheduleDataOverride.length > 0;
+            const requestBody = {
+                task_data: {
+                    title: trimmedTitle,
+                    description: payload.taskData.description.trim(),
+                    due_date: dueDateValue,
+                    priority: payload.taskData.priority.toLowerCase(),
+                },
+                assigned_user_ids: sanitizedAssignedUserIds,
+                ...(shouldSendScheduleData ? { schedule_data: scheduleDataOverride } : {}),
+            };
 
-        const sendCreateRequest = async (accessToken: string) => {
             return fetch(`${API_URL}/api/v1/tasks/tasks/?care_space_id=${payload.careSpaceId}`, {
                 method: "POST",
                 headers: {
@@ -200,23 +225,227 @@ export function TasksProvider({ children }: { children: ReactNode }) {
             });
         };
 
-        let response = await sendCreateRequest(user.access_token);
+        const parseResponsePayload = async (response: Response) => {
+            const rawText = await response.text().catch(() => "");
 
-        if (response.status === 401) {
-            const refreshedToken = await refreshAccessToken();
-
-            if (!refreshedToken) {
-                await logout();
-                throw new Error("Session expired. Please log in again.");
+            if (!rawText) {
+                return null;
             }
 
-            response = await sendCreateRequest(refreshedToken);
+            try {
+                return JSON.parse(rawText);
+            } catch {
+                return { detail: rawText };
+            }
+        };
+
+        const toWeeklyScheduleVariant = (scheduleData: CreateTaskPayload["scheduleData"]) => {
+            const converted = scheduleData.map((entry) => {
+                if ((entry.recurrence_type || "").toLowerCase() !== "custom") {
+                    return entry;
+                }
+
+                return {
+                    ...entry,
+                    recurrence_type: "weekly" as const,
+                };
+            });
+
+            const changed = converted.some((entry, index) => entry.recurrence_type !== scheduleData[index].recurrence_type);
+            return changed ? converted : null;
+        };
+
+        const executeCreateAttempt = async (
+            accessToken: string,
+            dueDateValue: string,
+            scheduleDataOverride: CreateTaskPayload["scheduleData"] | null,
+        ) => {
+            let response = await sendCreateRequest(accessToken, dueDateValue, scheduleDataOverride);
+            let tokenAfterAttempt = accessToken;
+
+            if (response.status === 401) {
+                const refreshedToken = await refreshAccessToken();
+
+                if (!refreshedToken) {
+                    await logout();
+                    throw new Error("Session expired. Please log in again.");
+                }
+
+                tokenAfterAttempt = refreshedToken;
+                response = await sendCreateRequest(tokenAfterAttempt, dueDateValue, scheduleDataOverride);
+            }
+
+            const data = await parseResponsePayload(response);
+            return { response, data, tokenAfterAttempt };
+        };
+
+        let tokenForRetry = user.access_token;
+        const dueDateWithTime = payload.taskData.dueAtIso ?? payload.taskData.dueDate;
+        const weeklyScheduleVariant = toWeeklyScheduleVariant(payload.scheduleData);
+
+        const attempts: Array<{ dueDateValue: string; scheduleData: CreateTaskPayload["scheduleData"] | null }> = [
+            { dueDateValue: dueDateWithTime, scheduleData: payload.scheduleData },
+        ];
+
+        if (payload.taskData.dueAtIso) {
+            attempts.push({ dueDateValue: payload.taskData.dueDate, scheduleData: payload.scheduleData });
         }
 
-        const data = await response.json().catch(() => null);
+        if (weeklyScheduleVariant) {
+            attempts.push({ dueDateValue: payload.taskData.dueDate, scheduleData: weeklyScheduleVariant });
+        }
 
-        if (!response.ok) {
-            throw new Error(parseApiError(data));
+        attempts.push({ dueDateValue: payload.taskData.dueDate, scheduleData: null });
+
+        let response: Response | null = null;
+        let data: any = null;
+        let lastError = "Unable to process task request.";
+        const retryableStatuses = new Set([400, 404, 409, 422]);
+
+        const looksLikeCreatedTaskPayload = (payloadData: any) => {
+            if (!payloadData || typeof payloadData !== "object") {
+                return false;
+            }
+
+            const taskId = Number(payloadData.task_id ?? payloadData.id);
+            const title = typeof payloadData.title === "string" ? payloadData.title.trim() : "";
+
+            return Number.isInteger(taskId) && taskId > 0 && title.length > 0;
+        };
+
+        const normalizeCompareText = (value: unknown) => {
+            return typeof value === "string" ? value.trim().toLowerCase() : "";
+        };
+
+        const recoverCreatedTaskFromList = async () => {
+            const listMy = listMyTasksRef.current;
+            const listCreatedByMe = listCreatedByMeTasksRef.current;
+            if (!listMy) {
+                return null;
+            }
+
+            const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            try {
+                const targetTitle = normalizeCompareText(trimmedTitle);
+                const targetDescription = normalizeCompareText(payload.taskData.description);
+
+                for (let attempt = 0; attempt < 8; attempt += 1) {
+                    const myPendingTasks = await listMy({ dateFilter: "all", status: "pending" });
+                    const createdByMePendingTasks = listCreatedByMe
+                        ? await listCreatedByMe({ dateFilter: "all", status: "pending" }).catch(() => [])
+                        : [];
+
+                    const candidates = [...myPendingTasks, ...createdByMePendingTasks];
+
+                    const match = candidates.find((task) => {
+                        if (task.careSpaceId !== payload.careSpaceId) {
+                            return false;
+                        }
+
+                        if (normalizeCompareText(task.title) !== targetTitle) {
+                            return false;
+                        }
+
+                        const dueDateMatches = (task.dueDate || "") === payload.taskData.dueDate;
+                        const descriptionMatches = normalizeCompareText(task.description) === targetDescription;
+
+                        return dueDateMatches || descriptionMatches;
+                    });
+
+                    if (match) {
+                        return match;
+                    }
+
+                    await wait(800);
+                }
+
+                return null;
+            } catch {
+                return null;
+            }
+        };
+
+        for (const attempt of attempts) {
+            const attemptResult = await executeCreateAttempt(tokenForRetry, attempt.dueDateValue, attempt.scheduleData);
+            response = attemptResult.response;
+            data = attemptResult.data;
+            tokenForRetry = attemptResult.tokenAfterAttempt;
+
+            if (response.ok) {
+                break;
+            }
+
+            // Some backend versions persist the task but still return a 500 payload with task fields.
+            if (looksLikeCreatedTaskPayload(data)) {
+                break;
+            }
+
+            lastError = parseApiError(data);
+
+            // Avoid re-posting on non-retryable server failures (e.g. 500),
+            // because some backend versions may create the task but return an error response.
+            if (!retryableStatuses.has(response.status)) {
+                break;
+            }
+        }
+
+        if (!response || (!response.ok && !looksLikeCreatedTaskPayload(data))) {
+            const recoveredTask = await recoverCreatedTaskFromList();
+            if (recoveredTask) {
+                return recoveredTask;
+            }
+
+            // Some backend deployments commit task creation but return 5xx.
+            // Prefer an optimistic success and reconcile in the background to avoid false failure UX.
+            if (response && response.status >= 500) {
+                const optimisticTask: Task = {
+                    id: `optimistic-${Date.now()}`,
+                    careSpaceId: payload.careSpaceId,
+                    title: trimmedTitle,
+                    dependent: payload.dependentName,
+                    description: payload.taskData.description.trim(),
+                    status: "pending",
+                    dueDate: payload.taskData.dueDate,
+                    dueTime: payload.taskData.dueTime,
+                    category: payload.taskData.category,
+                    priority: payload.taskData.priority,
+                    recurringPattern: payload.taskData.recurringPattern,
+                    reminderEnabled: payload.taskData.reminderEnabled,
+                    assignedUserIds: sanitizedAssignedUserIds.length > 0 ? sanitizedAssignedUserIds : undefined,
+                    assignedByUserId:
+                        typeof profileData?.user_id === "number" && profileData.user_id > 0
+                            ? profileData.user_id
+                            : undefined,
+                    clientCreatedAt: Date.now(),
+                };
+
+                setTasks((prev) => {
+                    const withoutDuplicate = prev.filter((task) => {
+                        const sameCareSpace = task.careSpaceId === optimisticTask.careSpaceId;
+                        const sameTitle = (task.title || "").trim().toLowerCase() === optimisticTask.title.trim().toLowerCase();
+                        const sameDueDate = (task.dueDate || "") === optimisticTask.dueDate;
+                        return !(sameCareSpace && sameTitle && sameDueDate);
+                    });
+
+                    return [...withoutDuplicate, optimisticTask];
+                });
+
+                const lm = listMyTasksRef.current;
+                const lcm = listCreatedByMeTasksRef.current;
+
+                if (lm) {
+                    lm({ dateFilter: "all", status: "pending" }).catch(() => null);
+                }
+
+                if (lcm) {
+                    lcm({ dateFilter: "all", status: "pending" }).catch(() => null);
+                }
+
+                return optimisticTask;
+            }
+
+            throw new Error(lastError);
         }
 
         const assignedByFromApi = data?.assigned_by;
@@ -397,18 +626,6 @@ export function TasksProvider({ children }: { children: ReactNode }) {
 
     const nameFromAssignment = (a: any): string | undefined => {
         if (!a || typeof a !== "object") return undefined;
-        const u = a.user;
-        if (u && typeof u === "object") {
-            const fullName = [u.first_name, u.middle_name, u.last_name]
-                .filter(Boolean)
-                .join(" ")
-                .replace(/\s+/g, " ")
-                .trim();
-            if (fullName) return fullName;
-            if (typeof u.username === "string" && u.username.trim()) {
-                return u.username.trim();
-            }
-        }
         const dep = a.dependent;
         if (dep && typeof dep === "object") {
             const nested = [dep.first_name, dep.middle_name, dep.last_name]
@@ -419,14 +636,15 @@ export function TasksProvider({ children }: { children: ReactNode }) {
             if (nested) return nested;
             if (typeof dep.name === "string" && dep.name.trim()) return dep.name.trim();
         }
-        const direct = [a.dependent_name, a.assignee_name, a.member_name, a.full_name, a.display_name, a.name].find(
+        const dependentDirect = [a.dependent_name, a.dependent_display_name].find(
             (v) => typeof v === "string" && v.trim().length > 0,
         ) as string | undefined;
-        return direct?.trim();
+        if (dependentDirect?.trim()) return dependentDirect.trim();
+        return undefined;
     };
 
     const buildDependentName = (assignments: any[] | undefined, apiTask?: any): string => {
-        const fromTask = [apiTask?.dependent_name, apiTask?.assignee_name, apiTask?.assignee_display_name].find(
+        const fromTask = [apiTask?.dependent_name, apiTask?.dependent_display_name].find(
             (v) => typeof v === "string" && v.trim().length > 0,
         ) as string | undefined;
         if (fromTask) return fromTask.trim();
@@ -631,21 +849,20 @@ export function TasksProvider({ children }: { children: ReactNode }) {
                 });
                 const mergedIdSet = new Set<number>([...(mergedIdsFromApiOrPrev ?? []), ...fromNestedRows]);
                 const mergedIds = mergedIdSet.size > 0 ? [...mergedIdSet] : undefined;
-                const apiPlaceholder = !task.dependent || task.dependent === "Assigned Member";
-                const mergedDependent =
-                    !apiPlaceholder && task.dependent
-                        ? task.dependent
-                        : previous?.dependent && previous.dependent !== "Assigned Member"
-                            ? previous.dependent
-                            : task.dependent;
+                const mergedDependent = task.dependent;
 
                 const mergedCareSpaceId = task.careSpaceId ?? previous?.careSpaceId;
                 const mergedSchedules = task.schedules ?? previous?.schedules;
                 const mergedAssignments = task.assignments ?? previous?.assignments;
                 const mergedCompletions = task.completions ?? previous?.completions;
+                const mergedStatus =
+                    previous?.status === "completed" && task.status !== "completed"
+                        ? "completed"
+                        : task.status;
 
                 return {
                     ...task,
+                    status: mergedStatus,
                     careSpaceId: mergedCareSpaceId,
                     schedules: mergedSchedules,
                     assignments: mergedAssignments,
@@ -996,6 +1213,17 @@ export function TasksProvider({ children }: { children: ReactNode }) {
             status: "completed",
             acknowledge: false,
         });
+
+        setTasks((prev) =>
+            prev.map((existing) =>
+                existing.id === task.id
+                    ? {
+                          ...existing,
+                          status: "completed",
+                      }
+                    : existing,
+            ),
+        );
     };
 
     const updateTask = (id: string, updates: Partial<Task>) => {

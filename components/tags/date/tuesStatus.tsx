@@ -23,6 +23,6 @@ const styles = StyleSheet.create({
     },
     dateText: {
         color: "#000000",
-        fontSize: 14,
+        fontSize: 13,
     },
 });

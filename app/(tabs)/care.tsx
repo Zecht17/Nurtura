@@ -5,7 +5,9 @@ import AddDependentModal from "@/components/modals/addDependentModal";
 import { styles } from "@/components/styles/care-css";
 import { useCareSpaces } from "@/context/CareSpacesContext";
 import { useDependents } from "@/context/DependentContext";
+import { useUser } from "@/context/UserContext";
 import { getResponsiveTokens } from "@/utils/responsive";
+import { normalizeUserRole } from "@/utils/userRole";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
@@ -26,6 +28,11 @@ export default function CareScreen() {
     const [activeCareSpaceId, setActiveCareSpaceId] = useState<string | null>(null);
     const { careSpaces, createCareSpace, joinCareSpaceViaCode, addDependentToCareSpace } = useCareSpaces();
     const { dependents } = useDependents();
+    const { profileData } = useUser();
+
+    const normalizedRole = normalizeUserRole(profileData?.role);
+    const showCreateButton = normalizedRole === "family_member";
+    const showJoinButton = normalizedRole === "family_member" || normalizedRole === "caregiver";
 
     const activeCareSpace = useMemo(
         () => (activeCareSpaceId ? careSpaces.find((space) => space.id === activeCareSpaceId) : undefined),
@@ -73,7 +80,12 @@ export default function CareScreen() {
                     </View>
 
                     {/* This is for the buttons */}
-                    <CareButtons onCreateCareSpace={createCareSpace} onJoinCareSpace={joinCareSpaceViaCode} />
+                    <CareButtons
+                        onCreateCareSpace={createCareSpace}
+                        onJoinCareSpace={joinCareSpaceViaCode}
+                        showCreateButton={showCreateButton}
+                        showJoinButton={showJoinButton}
+                    />
 
                     {/* This section is for the care container */}
                     {careSpaces.map((careSpace) => (

@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Stack, useGlobalSearchParams, usePathname, useRootNavigationState, useRouter, useSegments } from "expo-router";
+import { Stack, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, Image, PanResponder, TextInput as RNTextInput, StatusBar, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -10,34 +10,15 @@ import { CareSpacesProvider } from "../context/CareSpacesContext";
 import { ChatbotProvider } from "../context/ChatbotContext";
 import { DashboardProvider } from "../context/dashboardContext";
 import { DependentProvider } from "../context/DependentContext";
+import { NotificationProvider } from "../context/notificationContext";
 import { TasksProvider, useTasks } from "../context/tasksContext";
 import { UserProvider } from "../context/UserContext";
 
-function RouteGuard({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const segments = useSegments();
-  const rootState = useRootNavigationState();
+function AppNavigator() {
   const { user, authChecking } = useAuth();
+  const isAuthed = !!user;
 
-  useEffect(() => {
-    if (!rootState?.key) return; // navigation not ready
-    if (authChecking) return;
-
-    const currentSegment = segments[0];
-    const onAuthScreens = pathname === "/login" || pathname === "/signup" || currentSegment === "login" || currentSegment === "signup";
-
-    if (!user && !onAuthScreens) {
-      // defer to next tick to avoid pre-mount navigation warning
-      setTimeout(() => router.replace("/login"), 0);
-    }
-
-    if (user && onAuthScreens) {
-      setTimeout(() => router.replace("/"), 0);
-    }
-  }, [user, authChecking, pathname, router, rootState?.key, segments]);
-
-  if (authChecking || !rootState?.key) {
+  if (authChecking) {
     return (
       <View style={styles.guardLoadingContainer}>
         <ActivityIndicator size="large" color="#7C6FDC" />
@@ -45,7 +26,28 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="login" options={{ headerShown: false }} redirect={isAuthed} />
+      <Stack.Screen name="signup" options={{ headerShown: false }} redirect={isAuthed} />
+
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="addTaskPage" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="editTaskPage" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="taskDetails" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="aiChat" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="dependentProfile" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="profileAndAccount" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="editProfile" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="settings" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="addDependent" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="editDependent" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="dependentAccount" options={{ headerShown: false }} redirect={!isAuthed} />
+      <Stack.Screen name="emergencyAlertPage" options={{ headerShown: false }} redirect={!isAuthed} />
+    </Stack>
+  );
 }
 
 
@@ -84,34 +86,16 @@ export default function RootLayout() {
             <DependentProvider>
               <DashboardProvider>
               <TasksProvider>
-                <CareSpacesProvider>
-                  <PaperProvider theme={MD3LightTheme}>
-                    <GlobalPullToRefresh>
-                      <ReminderMounts />
-                      <RouteGuard>
-                        <Stack>
-                          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                          <Stack.Screen name="login" options={{ headerShown: false }} />
-                          <Stack.Screen name="signup" options={{ headerShown: false }} />
-                          <Stack.Screen name="addTaskPage" options={{ headerShown: false }} />
-                          <Stack.Screen name="editTaskPage" options={{ headerShown: false }} />
-                          <Stack.Screen name="taskDetails" options={{ headerShown: false }} />
-                          <Stack.Screen name="careSpaceSettings" options={{ headerShown: false }} />
-                          <Stack.Screen name="editCareSpaceSettings" options={{ headerShown: false }} />
-                          <Stack.Screen name="aiChat" options={{ headerShown: false }} />
-                          <Stack.Screen name="dependentProfile" options={{ headerShown: false }} />
-                          <Stack.Screen name="profileAndAccount" options={{ headerShown: false }} />
-                          <Stack.Screen name="editProfile" options={{ headerShown: false }} />
-                          <Stack.Screen name="settings" options={{ headerShown: false }} />
-                          <Stack.Screen name="addDependent" options={{ headerShown: false }} />
-                          <Stack.Screen name="editDependent" options={{ headerShown: false }} />
-                          <Stack.Screen name="dependentAccount" options={{ headerShown: false }} />
-                          <Stack.Screen name="emergencyAlertPage" options={{ headerShown: false }} />
-                        </Stack>
-                      </RouteGuard>
-                    </GlobalPullToRefresh>
-                  </PaperProvider>
-                </CareSpacesProvider>
+                <NotificationProvider>
+                  <CareSpacesProvider>
+                    <PaperProvider theme={MD3LightTheme}>
+                      <GlobalPullToRefresh>
+                        <ReminderMounts />
+                        <AppNavigator />
+                      </GlobalPullToRefresh>
+                    </PaperProvider>
+                  </CareSpacesProvider>
+                </NotificationProvider>
               </TasksProvider>
               </DashboardProvider>
             </DependentProvider>

@@ -2,6 +2,7 @@ import EditableTaskCard from "@/components/cards/editableTaskCard";
 import EditorRoleCard from "@/components/cards/editorRoleCard";
 import NoPendingTask from "@/components/cards/noPendingTask";
 import OwnerRoleCard from "@/components/cards/ownerRoleCard";
+import TaskCard from "@/components/cards/taskCard";
 import ViewerRoleCard from "@/components/cards/viewerRoleCard";
 import AddDependentModal from "@/components/modals/addDependentModal";
 import DeleteCareSpaceModal from "@/components/modals/deleteCareSpaceModal";
@@ -81,13 +82,14 @@ export default function CareSpaceSettings() {
     const { user } = useAuth();
     const { profileData } = useUser();
     const selfDependentResolution = useMemo(() => selfDependentContextFromProfile(profileData), [profileData]);
-    const { tasks: tasksFromContext, deleteTaskApi, listMyTasks, listCreatedByMeTasks } = useTasks();
+    const { tasks: tasksFromContext, deleteTaskApi, listMyTasks, listCreatedByMeTasks, listTasksByMember } = useTasks();
     const careSpaceId = getParamValue(params.id);
     const selectedCareSpace = careSpaceId ? careSpaces.find((item) => item.id === careSpaceId) : undefined;
     const currentUserRole = selectedCareSpace?.currentUserRole;
     const canEditCareSpaceInfo = currentUserRole === "Owner";
     const canDeleteCareSpace = currentUserRole === "Owner";
     const canAddMembers = currentUserRole === "Owner";
+    const canManageTasks = currentUserRole === "Owner" || currentUserRole === "Editor";
 
     const initialSpaceName = (selectedCareSpace?.title ?? getParamValue(params.title)?.trim()) || "Emma's Care";
     const initialDescription = (selectedCareSpace?.description ?? getParamValue(params.description)?.trim()) || "Case for Emma";
@@ -134,6 +136,28 @@ export default function CareSpaceSettings() {
     };
 
     const numericCareSpaceIdResolved = useMemo(() => resolveCareSpaceNumericId(), [careSpaceId, selectedCareSpace?.id]);
+
+    const careSpaceDependentUserIds = useMemo(() => {
+        const idsFromCareSpace = (selectedCareSpace?.dependents || [])
+            .map((dependent) => dependent.userId)
+            .filter((id): id is number => typeof id === "number" && id > 0);
+
+        if (idsFromCareSpace.length > 0) {
+            return [...new Set(idsFromCareSpace)];
+        }
+
+        // Fallback for older cached care-space records without dependent user IDs.
+        const idsByName = (selectedCareSpace?.dependents || [])
+            .map((careSpaceDependent) => {
+                const match = dependents.find(
+                    (dependent) => dependent.name.trim().toLowerCase() === careSpaceDependent.name.trim().toLowerCase(),
+                );
+                return match?.userId ?? match?.dependentId;
+            })
+            .filter((id): id is number => typeof id === "number" && id > 0);
+
+        return [...new Set(idsByName)];
+    }, [selectedCareSpace?.dependents, dependents]);
 
     /** Care space model `tasks` is not filled from API; use TasksContext like Home. */
     const tasksInThisCareSpace = useMemo((): Task[] => {
@@ -261,7 +285,11 @@ export default function CareSpaceSettings() {
         return () => clearInterval(id);
     }, []);
 
-    /** Ensure TasksContext has pending, completed, and missed rows (same slices as Tasks tab) before filtering by care space. */
+    /**
+     * Ensure TasksContext has all rows needed for this care space:
+     * - my/created slices (existing behavior)
+     * - dependent-assigned slices inside this care space (for owner/editor visibility)
+     */
     useEffect(() => {
         if (!user?.access_token || numericCareSpaceIdResolved == null) {
             return;
@@ -279,12 +307,26 @@ export default function CareSpaceSettings() {
                     // Network / auth — Tasks tab can refetch
                 }
             }
+
+            if (cancelled) return;
+
+            if (canManageTasks && careSpaceDependentUserIds.length > 0) {
+                await Promise.all(
+                    careSpaceDependentUserIds.map(async (dependentUserId) => {
+                        try {
+                            await listTasksByMember(dependentUserId, numericCareSpaceIdResolved);
+                        } catch {
+                            // Keep partial data when one member endpoint fails.
+                        }
+                    }),
+                );
+            }
         })();
         return () => {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps -- list fns are stable enough; avoid re-fetch loops
-    }, [user?.access_token, numericCareSpaceIdResolved]);
+    }, [user?.access_token, numericCareSpaceIdResolved, canManageTasks, careSpaceDependentUserIds]);
 
     const parseDueDateTime = (dueDate?: string, dueTime?: string) => {
         if (!dueDate) return null;
@@ -509,10 +551,38 @@ export default function CareSpaceSettings() {
                                 <Text style={styles.careInfoTitle}>({decoratedTasks.length})</Text>
                             </View>
                         
-                        <Pressable style={styles.editButton}>
-                            <FontAwesome6 name="add" size={14} color="black" />
-                            <Text style={styles.editButtonText}>Add Task</Text>
-                        </Pressable>
+                        {canManageTasks ? (
+                            <Pressable
+                                style={styles.editButton}
+                                onPress={() => {
+                                    const scopedDependents = (selectedCareSpace?.dependents || [])
+                                        .filter((dependent) => typeof dependent.userId === "number" && dependent.userId > 0)
+                                        .map((dependent) => ({
+                                            userId: dependent.userId as number,
+                                            name: dependent.name,
+                                        }));
+
+                                    const scopedDependentUserIds = scopedDependents.map((dependent) => dependent.userId);
+
+                                    router.push({
+                                        pathname: "/addTaskPage",
+                                        params: {
+                                            from: "careSpaceSettings",
+                                            careSpaceId:
+                                                numericCareSpaceIdResolved != null
+                                                    ? String(numericCareSpaceIdResolved)
+                                                    : undefined,
+                                            careSpaceTitle: spaceName,
+                                            dependentUserIds: JSON.stringify(scopedDependentUserIds),
+                                            scopedDependents: JSON.stringify(scopedDependents),
+                                        },
+                                    });
+                                }}
+                            >
+                                <FontAwesome6 name="add" size={14} color="black" />
+                                <Text style={styles.editButtonText}>Add Task</Text>
+                            </Pressable>
+                        ) : null}
                         </View>
                         {/* This is for the task card */}
                         {decoratedTasks.length === 0 ? (
@@ -531,56 +601,97 @@ export default function CareSpaceSettings() {
                                     nestedScrollEnabled
                                 >
                                     {decoratedTasks.map((task) => (
-                                        <EditableTaskCard
-                                            key={task.id}
-                                            value={task.id}
-                                            selectedTask={selectedTask}
-                                            onSelect={setSelectedTask}
-                                            title={task.title}
-                                            dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution)}
-                                            description={task.description}
-                                            statusTags={
-                                                <>
-                                                    {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
-                                                    {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
-                                                    {(() => {
-                                                        const recurringBase = getRecurringPatternBase(task.recurringPattern);
-                                                        return recurringBase ? recurringTagByPattern[recurringBase as keyof typeof recurringTagByPattern] : null;
-                                                    })()}
-                                                </>
-                                            }
-                                            dateTag={
-                                                <>
-                                                    <RecurringDayStatusTags recurringPattern={task.recurringPattern} />
-                                                    {renderDateTag(task.dueDate, task.dueTime)}
-                                                </>
-                                            }
-                                            onEdit={() =>
-                                                router.push({
-                                                    pathname: "/editTaskPage",
-                                                    params: {
-                                                        id: task.id,
-                                                        careSpaceId:
-                                                            numericCareSpaceIdResolved != null
-                                                                ? String(numericCareSpaceIdResolved)
-                                                                : undefined,
-                                                    },
-                                                })
-                                            }
-                                            onPress={() =>
-                                                router.push({
-                                                    pathname: "/taskDetails",
-                                                    params: {
-                                                        id: task.id,
-                                                        careSpaceId:
-                                                            numericCareSpaceIdResolved != null
-                                                                ? String(numericCareSpaceIdResolved)
-                                                                : undefined,
-                                                    },
-                                                })
-                                            }
-                                            onDelete={() => setPendingDeleteId(task.id)}
-                                        />
+                                        canManageTasks ? (
+                                            <EditableTaskCard
+                                                key={task.id}
+                                                value={task.id}
+                                                selectedTask={selectedTask}
+                                                onSelect={setSelectedTask}
+                                                title={task.title}
+                                                dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution, careSpaces)}
+                                                description={task.description}
+                                                statusTags={
+                                                    <>
+                                                        {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
+                                                        {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
+                                                        {(() => {
+                                                            const recurringBase = getRecurringPatternBase(task.recurringPattern);
+                                                            return recurringBase ? recurringTagByPattern[recurringBase as keyof typeof recurringTagByPattern] : null;
+                                                        })()}
+                                                    </>
+                                                }
+                                                dateTag={
+                                                    <>
+                                                        <RecurringDayStatusTags recurringPattern={task.recurringPattern} />
+                                                        {renderDateTag(task.dueDate, task.dueTime)}
+                                                    </>
+                                                }
+                                                onEdit={() =>
+                                                    router.push({
+                                                        pathname: "/editTaskPage",
+                                                        params: {
+                                                            id: task.id,
+                                                            careSpaceId:
+                                                                numericCareSpaceIdResolved != null
+                                                                    ? String(numericCareSpaceIdResolved)
+                                                                    : undefined,
+                                                        },
+                                                    })
+                                                }
+                                                onPress={() =>
+                                                    router.push({
+                                                        pathname: "/taskDetails",
+                                                        params: {
+                                                            id: task.id,
+                                                            careSpaceId:
+                                                                numericCareSpaceIdResolved != null
+                                                                    ? String(numericCareSpaceIdResolved)
+                                                                    : undefined,
+                                                        },
+                                                    })
+                                                }
+                                                onDelete={() => setPendingDeleteId(task.id)}
+                                            />
+                                        ) : (
+                                            <TaskCard
+                                                key={task.id}
+                                                value={task.id}
+                                                selectedTask={selectedTask}
+                                                onSelect={setSelectedTask}
+                                                readOnly
+                                                title={task.title}
+                                                dependent={resolveDependentDisplayName(task, dependents, selfDependentResolution, careSpaces)}
+                                                description={task.description}
+                                                statusTags={
+                                                    <>
+                                                        {statusTagByStatus[task.computedStatus as keyof typeof statusTagByStatus]}
+                                                        {task.priority && priorityTagByLevel[task.priority as keyof typeof priorityTagByLevel]}
+                                                        {(() => {
+                                                            const recurringBase = getRecurringPatternBase(task.recurringPattern);
+                                                            return recurringBase ? recurringTagByPattern[recurringBase as keyof typeof recurringTagByPattern] : null;
+                                                        })()}
+                                                    </>
+                                                }
+                                                dateTag={
+                                                    <>
+                                                        <RecurringDayStatusTags recurringPattern={task.recurringPattern} />
+                                                        {renderDateTag(task.dueDate, task.dueTime)}
+                                                    </>
+                                                }
+                                                onPress={() =>
+                                                    router.push({
+                                                        pathname: "/taskDetails",
+                                                        params: {
+                                                            id: task.id,
+                                                            careSpaceId:
+                                                                numericCareSpaceIdResolved != null
+                                                                    ? String(numericCareSpaceIdResolved)
+                                                                    : undefined,
+                                                        },
+                                                    })
+                                                }
+                                            />
+                                        )
                                     ))}
                                 </ScrollView>
                             </View>

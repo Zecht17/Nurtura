@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Link, usePathname, useRouter } from "expo-router";
+import { Link, usePathname } from "expo-router";
 import { useState } from "react";
 import { Image, KeyboardAvoidingView, Platform, StatusBar, StyleSheet, View } from "react-native";
 import { Button, Text, TextInput } from "react-native-paper";
@@ -40,7 +40,6 @@ export default function LoginScreen() {
     const [menuVisible, setMenuVisible] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     // for navigation
-    const router = useRouter();
     const pathname = usePathname();
     const { login, loading, error } = useAuth();
     StatusBar.setBarStyle("dark-content");
@@ -54,7 +53,6 @@ export default function LoginScreen() {
 
         try {
             await login({ identifier, password, role });
-            router.replace("/");
         } catch (err) {
             // error is handled in context, but keep a local fallback
             setFormError((err as Error)?.message || "Login failed");
@@ -84,14 +82,14 @@ export default function LoginScreen() {
                     <Text style={styles.subText}>Sign In to continue managing your care tasks</Text>
 
                 {/* This is the email input */}
-                <Text style={styles.inputTitle}>Email or Username</Text>
+                <Text style={styles.inputTitle}>Username</Text>
                 <TextInput 
                     value={identifier}
                     onChangeText={text => setIdentifier(text)} 
                     autoCorrect={false}
                     autoCapitalize="none" 
-                    keyboardType="email-address" 
-                    placeholder="example@email.com" 
+                    keyboardType="default" 
+                    placeholder="Enter your username" 
                     mode="outlined"  
                     activeOutlineColor="#6d28d9" 
                     outlineStyle={{ borderRadius: 12, borderWidth: 1.5 }} 
